@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#15120e" />
+  <title>象棋大战象棋</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <div class="ambient ambient-a"></div>
+    <div class="ambient ambient-b"></div>
+
+    <section id="homeScreen" class="screen active home-screen">
+      <header class="brand-bar">
+        <div class="mini-brand"><span>♟</span> ROYAL GRID STUDIO</div>
+        <button class="icon-button" data-open="archiveScreen" title="敌军资料库">◎</button>
+      </header>
+
+      <main class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow">CHESS × XIANGQI · TOWER DEFENSE</div>
+          <h1><span>象棋大战</span><strong>象棋</strong></h1>
+          <p class="hero-subtitle">当王冠踏入楚河汉界，<br />每一格都将成为战场。</p>
+
+          <div class="home-actions">
+            <button class="primary-button story-button" id="storyButton">
+              <span class="button-glyph">♔</span>
+              <span><b>故事模式</b><small>营救被紫蛇掳走的挚友</small></span>
+              <i>→</i>
+            </button>
+            <button class="primary-button battle-button" id="battleButton">
+              <span class="button-glyph">⚔</span>
+              <span><b>开始对战</b><small>选择规则，挑战极限</small></span>
+              <i>→</i>
+            </button>
+          </div>
+
+          <div class="home-meta">
+            <span><i class="status-dot"></i> 本地作战系统就绪</span>
+            <button data-open="archiveScreen">敌军资料 <b id="archiveCount">1/12</b></button>
+          </div>
+        </div>
+
+        <div class="hero-art" aria-label="国王棋子迎战中国象棋">
+          <div class="moon-ring"></div>
+          <div class="red-seal seal-one">楚</div>
+          <div class="red-seal seal-two">漢</div>
+          <div class="king-piece">
+            <div class="king-cross">✦</div>
+            <div class="king-crown">♛</div>
+            <div class="king-head"></div>
+            <div class="king-neck"></div>
+            <div class="king-body"><span>♔</span></div>
+            <div class="king-base"></div>
+          </div>
+          <div class="enemy-disc disc-a"><span>炮</span></div>
+          <div class="enemy-disc disc-b"><span>馬</span></div>
+          <div class="enemy-disc disc-c"><span>兵</span></div>
+          <div class="slash-line"></div>
+        </div>
+      </main>
+      <footer class="home-footer"><span>V 1.0 · 桌面战役版</span><span>移动棋子，守住最后一道防线</span></footer>
+    </section>
+
+    <section id="storyScreen" class="screen menu-screen">
+      <header class="page-header">
+        <button class="back-button" data-open="homeScreen">←</button>
+        <div><span class="eyebrow">CAMPAIGN</span><h2>故事模式</h2></div>
+        <div class="chapter-progress"><span id="storyProgressLabel">序章</span><div><i id="storyProgressBar"></i></div></div>
+      </header>
+      <main class="story-layout">
+        <aside class="story-intro">
+          <span class="section-number">01</span>
+          <h3>穿过<br />楚河汉界</h3>
+          <p>紫色的蛇影卷走了露西，只留下一枚破碎的白色兵徽。沿着它留下的踪迹，向东进发。</p>
+          <div class="quote">“我会把你带回来。”<br /><b>— 亚瑟</b></div>
+        </aside>
+        <div class="level-map" id="levelMap"></div>
+      </main>
+    </section>
+
+    <section id="battleScreen" class="screen menu-screen">
+      <header class="page-header">
+        <button class="back-button" data-open="homeScreen">←</button>
+        <div><span class="eyebrow">CHALLENGE</span><h2>开始对战</h2></div>
+        <div class="header-note">选择一种战场规则</div>
+      </header>
+      <main class="challenge-grid" id="challengeGrid"></main>
+    </section>
+
+    <section id="archiveScreen" class="screen menu-screen archive-screen">
+      <header class="page-header">
+        <button class="back-button" data-open="homeScreen">←</button>
+        <div><span class="eyebrow">INTELLIGENCE</span><h2>敌军资料库</h2></div>
+        <div class="header-note">随故事推进逐步解密</div>
+      </header>
+      <main class="archive-layout">
+        <div class="archive-list" id="archiveList"></div>
+        <article class="archive-detail" id="archiveDetail"></article>
+      </main>
+    </section>
+
+    <section id="dialogueScreen" class="screen dialogue-screen">
+      <div class="dialogue-scene" id="dialogueScene">
+        <button class="dialogue-skip" id="dialogueSkip">跳过对话 ↗</button>
+        <div class="scene-title" id="sceneTitle"></div>
+        <div class="portrait portrait-left" id="portraitLeft"><span>♔</span></div>
+        <div class="portrait portrait-right" id="portraitRight"><span>蛇</span></div>
+        <div class="dialogue-box">
+          <div class="speaker" id="dialogueSpeaker">亚瑟</div>
+          <p id="dialogueText"></p>
+          <button id="dialogueNext">继续 <span>→</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="gameScreen" class="screen game-screen">
+      <header class="game-header">
+        <button class="game-quit" id="gameQuit">×</button>
+        <div class="mission-block"><span>当前任务</span><strong id="missionTitle">守住防线</strong></div>
+        <div class="objective-block">
+          <div class="objective-copy"><span id="objectiveLabel">第 1 波 / 共 6 波</span><b id="objectiveValue">0 / 6</b></div>
+          <div class="objective-track"><i id="objectiveBar"></i></div>
+        </div>
+        <div class="battle-resources">
+          <div class="energy-counter"><span>✦</span><b id="energyValue">250</b><small>能量</small></div>
+          <button id="pauseButton">Ⅱ</button>
+        </div>
+      </header>
+
+      <main class="game-main">
+        <aside class="unit-tray" id="unitTray"></aside>
+        <section class="battlefield-wrap">
+          <div class="lane-labels" id="laneLabels"></div>
+          <div id="board" class="board">
+            <div class="river-mark"><span>楚 河</span><span>漢 界</span></div>
+            <div id="grid" class="grid"></div>
+            <div id="entityLayer" class="entity-layer"></div>
+            <div id="effectLayer" class="effect-layer"></div>
+          </div>
+          <div class="battlefield-footer">
+            <span><i class="legend player-legend"></i> 王冠军</span>
+            <span class="battle-tip" id="battleTip">选择棋子，再点击空格部署</span>
+            <span><i class="legend enemy-legend"></i> 汉界军</span>
+          </div>
+        </section>
+      </main>
+
+      <div class="pause-overlay" id="pauseOverlay">
+        <div><span class="eyebrow">BATTLE PAUSED</span><h2>战局暂停</h2><button id="resumeButton">继续战斗</button><button id="pauseQuit">退出本局</button></div>
+      </div>
+    </section>
+
+    <section id="resultScreen" class="screen result-screen">
+      <div class="result-card">
+        <div class="result-emblem" id="resultEmblem">♔</div>
+        <span class="eyebrow" id="resultEyebrow">MISSION COMPLETE</span>
+        <h2 id="resultTitle">防线守住了</h2>
+        <p id="resultText"></p>
+        <div class="result-stats">
+          <div><b id="statKills">0</b><span>击破</span></div>
+          <div><b id="statEnergy">0</b><span>收集能量</span></div>
+          <div><b id="statTime">0:00</b><span>用时</span></div>
+        </div>
+        <div class="rank-report" id="rankReport"></div>
+        <div class="result-actions">
+          <button class="secondary-button" id="resultHome">返回大厅</button>
+          <button class="primary-button compact" id="resultNext">继续</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="toast" class="toast"></div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
