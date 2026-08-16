@@ -178,7 +178,8 @@ assert.equal(scoreAttack.duration,120,"计分赛时长应为120秒");
 assert.equal(scoreAttack.targetKills,undefined,"计分赛不应再设置80杀通关目标");
 assert.equal(scoreAttack.scoreAttack,true,"百二十秒模式应按时间内击杀数计分");
 assert.ok(api.growthEnemyPool("spearPawn").includes("digger")&&api.growthEnemyPool("bishop").includes("elephant"),"成长演示应按我方棋子特性安排不同敌军，不得全部使用兵卒");
-assert.deepEqual(plain(Object.keys(api.units)), ["pawn","rook","king","knight","shieldPawn","spearPawn","bishop","twinRook","queen","iceRook","stormKnight","twinBishop","flameRook","royalKing","poisonRook","prismQueen","frostKnight","poisonBishop","twinQueen","iceBishop","flameBishop","shieldKing"], "应保留原有棋子并新增双后、冰象等六种衍生棋");
+assert.equal(Object.keys(api.units).length,30,"棋子池应扩展到30种");
+assert.deepEqual(plain(Object.keys(api.units).slice(-8)),["berserkerPawn","bombardRook","warKing","guardianKnight","lightBishop","shadowQueen","superRook","superQueen"],"应保留六枚新增棋并加入超级车与超级后");
 assert.ok(Object.values(api.units).every(unit => !Object.hasOwn(unit,"symbol")), "我方棋子数据不应再依赖Unicode棋子字形");
 assert.ok(api.unitArt("rook").includes("art-rook") && !/[\u2654-\u265f]/.test(api.unitArt("rook")), "棋子应输出自绘CSS结构");
 assert.ok(Object.keys(api.units).every(type => api.rankTraits[type]?.length === 5), "成长之路应为每枚棋子提供完整的1–5阶演示资料");
@@ -186,8 +187,10 @@ assert.equal(new Set(Object.values(api.rankTraits).map(route=>JSON.stringify(rou
 assert.ok(api.rankTraits.twinRook[3][0].includes("换线")&&api.rankTraits.iceRook[1][0].includes("净化")&&api.rankTraits.queen[2][0].includes("五线"),"成长路线应包含跨路支援、环境互动与五线调度等非惯式质变");
 assert.ok(!source.includes("const LEGACY_RANK_TRAITS = {")&&source.includes("五阶不再默认绑定阵亡效果"),"不得保留旧的统一散射、分裂、破阵、阵亡遗技成长模板");
 assert.ok(Object.keys(api.units).every(type => api.ultTraits[type]?.length === 2), "成长之路应为每枚棋子提供能量豆大招资料");
+assert.ok(["berserkerPawn","bombardRook","warKing","guardianKnight","lightBishop","shadowQueen","superRook","superQueen"].every(type=>api.abilitySpecs[type]),"八枚新棋必须全部接入正式能量豆大招配置");
 assert.equal(`${api.boardRules.rows}×${api.boardRules.cols}`,"5×9","成长演示与正式战斗应共用5×9棋盘规则");
 assert.ok(api.abilitySummary("rook").includes("15发")&&api.abilitySummary("rook").includes("90–120"),"成长演示参数说明应直接读取车的大招实战配置");
+assert.ok(api.abilitySummary("bombardRook").includes("溅射")&&api.abilitySummary("lightBishop").includes("全体治疗")&&api.abilitySummary("shadowQueen").includes("暗印"),"新增棋子的大招说明必须呈现各自机制，而非只显示基础伤害");
 
 api.setStoryUnlocked(1);
 assert.deepEqual(plain(Object.keys(api.units).filter(api.isUnitUnlocked)), ["pawn","rook","king"], "初始应只解锁兵、车、王");
@@ -248,6 +251,11 @@ api.setGame(baseGame({ enemies: [cannon], players: [front, behind] }));
 api.updateEnemies(.1);
 assert.equal(front.hp, 500, "炮架棋子不应受到隔子炮伤害");
 assert.equal(behind.hp, 650, "隔子炮应对后方第二枚棋子造成150伤害");
+const enteringCannon={type:"cannon",row:0,x:8.2,hp:1100,maxHp:1100,attackTimer:0,slowTimer:0,frozenTimer:0,burnTimer:0,poisonTimer:0,vulnerableTimer:0,statusTick:0};
+const entryFront={type:"pawn",row:0,col:5,hp:500,maxHp:500},entryBehind={type:"king",row:0,col:3,hp:800,maxHp:800};
+api.setGame(baseGame({enemies:[enteringCannon],players:[entryFront,entryBehind]}));api.updateEnemies(.1);
+assert.equal(entryBehind.hp,800,"炮尚未完全露出时不得利用入场无敌提前开炮");assert.ok(enteringCannon.x<8.2,"未完全入场的炮应继续向棋盘内移动");
+enteringCannon.x=8.1;enteringCannon.attackTimer=0;api.updateEnemies(.1);assert.equal(entryBehind.hp,650,"炮完全入场后才可恢复隔子攻击");
 
 const elephant = { type: "elephant", row: 2, x: 5, hp: 1500, maxHp: 1500, attackTimer: 1, summonTimer: 0 };
 api.setGame(baseGame({ enemies: [elephant] }));
@@ -371,6 +379,15 @@ api.updatePlayers(.1);
 assert.ok(twinQueenTargets.every(enemy=>enemy.hp===660),"双后应向三路各连续发射两枚70伤害炮弹");
 assert.equal(api.getGame().projectiles.length,6,"双后每轮应生成六枚可见炮弹");
 for(let i=0;i<6;i+=2){assert.equal(api.getGame().projectiles[i].y,api.getGame().projectiles[i+1].y,"双后每路两弹应保持水平紧邻");assert.ok(api.getGame().projectiles[i].x-api.getGame().projectiles[i+1].x>=.55,"双后的双弹应水平分开且不得视觉连体");}
+
+const superRook={id:601,type:"superRook",row:2,col:1,hp:1250,maxHp:1250,timer:0,rank:1,attackCycles:0};
+const superRookTarget={type:"soldier",row:2,x:5,hp:2000,maxHp:2000};
+api.setGame(baseGame({players:[superRook],enemies:[superRookTarget],abilityEvents:[]}));api.updatePlayers(.1);
+assert.equal(superRookTarget.hp,1640,"超级车普攻应发出4枚90伤害普通车弹");assert.equal(api.getGame().projectiles.length,4,"超级车每次应生成4枚可见弹体");assert.equal(new Set(api.getGame().projectiles.map(projectile=>projectile.x)).size,4,"超级车的4枚弹体应并排分开而非视觉连体");
+const superQueen={id:602,type:"superQueen",row:2,col:1,hp:1000,maxHp:1000,timer:0,rank:1,attackCycles:0};
+const superQueenTargets=[1,2,3].map(row=>({type:"soldier",row,x:5,hp:2000,maxHp:2000}));
+api.setGame(baseGame({players:[superQueen],enemies:superQueenTargets,abilityEvents:[]}));api.updatePlayers(.1);
+assert.ok(superQueenTargets.every(enemy=>enemy.hp===1640),"超级后普攻应向连续三路各发4枚普通后弹");assert.equal(api.getGame().projectiles.length,12,"超级后每轮应生成三路共12枚弹体");
 
 const awakenedRook={id:501,type:"rook",row:2,col:1,hp:1200,maxHp:1200,timer:0,rank:5,storedShots:0};
 const awakenedTarget={type:"soldier",row:2,x:5,hp:5000,maxHp:5000};
@@ -582,6 +599,39 @@ api.damagePlayer(legacyPawn,50,{type:"soldier"});
 assert.equal(legacyA.hp,1000,"兵5阶不再绑定阵亡范围伤害");
 assert.equal(legacyB.hp,1000,"五阶成长应在存活时产生玩法变化，而非统一死亡遗技");
 
+const bloodPawn={type:"berserkerPawn",row:2,col:1,hp:250,maxHp:650,timer:0,rank:3,rageTimer:0};
+const bloodTarget={type:"soldier",row:2,x:2.2,hp:800,maxHp:800};
+api.setGame(baseGame({players:[bloodPawn],enemies:[bloodTarget]}));api.updatePlayers(.1);
+assert.ok(bloodTarget.hp<800&&bloodPawn.hp>250,"狂战兵3阶应在近战命中时吸血，而非只提高面板数值");
+
+const cannonRook={type:"bombardRook",row:2,col:1,hp:950,maxHp:950,timer:0,rank:2,attackCycles:0};
+const cannonMain={type:"soldier",row:2,x:5,hp:800,maxHp:800},cannonSplash={type:"soldier",row:2,x:5.8,hp:800,maxHp:800};
+api.setGame(baseGame({players:[cannonRook],enemies:[cannonMain,cannonSplash]}));api.updatePlayers(.1);
+assert.ok(cannonMain.hp<800&&cannonSplash.hp<800,"炮车炮弹必须同时伤害主目标与爆炸范围内敌军");
+
+const rallyPawn={type:"pawn",row:2,col:2,hp:500,maxHp:500,timer:5,rank:1},warKing={type:"warKing",row:2,col:1,hp:1050,maxHp:1050,timer:0,rank:1,supportCycles:0};
+api.setGame(baseGame({preview:true,players:[rallyPawn,warKing],energy:0,energyCollected:0,cooldowns:{}}));api.updatePlayers(.1);
+assert.equal(api.getGame().energy,20,"战王号令应生产20能量");assert.ok(rallyPawn.timer<=4,"战王号令应实际推进相邻友军的攻击计时");
+
+const holyKnight={type:"guardianKnight",row:2,col:1,hp:980,maxHp:980,timer:0,rank:1},holyTarget={type:"soldier",row:2,x:3,hp:800,maxHp:800,frozenTimer:0};
+api.setGame(baseGame({players:[holyKnight],enemies:[holyTarget]}));api.updatePlayers(.1);
+assert.ok(holyTarget.hp<800&&holyTarget.frozenTimer>=.6,"圣骑跃击应造成伤害并使目标短暂停顿");
+
+const woundedAlly={type:"pawn",row:2,col:2,hp:100,maxHp:500,timer:3,rank:1},lightBishop={type:"lightBishop",row:2,col:1,hp:700,maxHp:700,timer:0,rank:1,attackCycles:0},lightTarget={type:"soldier",row:1,x:2,hp:800,maxHp:800};
+api.setGame(baseGame({players:[lightBishop,woundedAlly],enemies:[lightTarget]}));api.updatePlayers(.1);
+assert.ok(woundedAlly.hp>100&&lightTarget.hp<800,"光象每轮应同时治疗友军并攻击斜线敌军");
+
+const shadowQueen={type:"shadowQueen",row:2,col:1,hp:820,maxHp:820,timer:0,rank:1,attackCycles:0},shadowTarget={type:"soldier",row:2,x:5,hp:800,maxHp:800,shadowMarks:0};
+api.setGame(baseGame({players:[shadowQueen],enemies:[shadowTarget]}));for(let i=0;i<3;i++){shadowQueen.timer=0;api.updatePlayers(.1);}
+assert.equal(shadowTarget.shadowMarks,0,"影后三次命中应引爆并清空三层暗印");assert.ok(shadowTarget.hp<=270,"三层暗印必须产生独立爆发伤害");
+
+const commandKing={id:501,type:"warKing",row:2,col:1,hp:1050,maxHp:1050,timer:4,rank:1},commandAlly={id:502,type:"pawn",row:2,col:2,hp:500,maxHp:500,timer:5,rank:1};
+api.setGame(baseGame({preview:true,players:[commandKing,commandAlly],enemies:[],abilityEvents:[],energy:0,energyCollected:0}));api.activateEnergyBean(commandKing,{preview:true});
+assert.equal(api.getGame().energy,150,"战王大招应立即获得150能量");assert.equal(commandAlly.timer,0,"全军总攻应让友军立即进入下一轮攻击");assert.ok(commandAlly.beanArmor>=300,"全军总攻应为友军补充护甲");
+const radiantBishop={id:503,type:"lightBishop",row:2,col:1,hp:700,maxHp:700,timer:0,rank:1},radiantAlly={id:504,type:"pawn",row:2,col:2,hp:100,maxHp:500,timer:1,rank:1},radiantEnemy={type:"soldier",row:2,x:5,hp:800,maxHp:800};
+api.setGame(baseGame({preview:true,players:[radiantBishop,radiantAlly],enemies:[radiantEnemy],abilityEvents:[],energy:0,energyCollected:0}));api.activateEnergyBean(radiantBishop,{preview:true});
+assert.equal(radiantAlly.hp,500,"光象大招应大幅治疗全体友军");assert.equal(radiantEnemy.hp,400,"光象大招应同时以圣光伤害全场敌军");
+
 api.setRank("king",3);
 const growthKing={type:"king",row:2,col:1,hp:800,maxHp:800,timer:0,rank:3,supportCycles:0};
 api.setGame(baseGame({players:[growthKing],energy:0,energyCollected:0}));
@@ -593,6 +643,11 @@ const twinRookDemo=api.buildGrowthStage();
 assert.ok(twinRookDemo.includes('growth-board-scale')&&twinRookDemo.includes('<div class="board">')&&twinRookDemo.includes("entity-layer")&&twinRookDemo.includes("effect-layer")&&!twinRookDemo.includes("demo-shot"),"成长演示必须在原尺寸正式棋盘内挂载正式战斗渲染层，不能再独立绘制炮弹");
 const growthCss=fs.readFileSync(path.join(__dirname,"..","styles.css"),"utf8");
 const pageHtml=fs.readFileSync(path.join(__dirname,"..","index.html"),"utf8");
+assert.ok(source.includes('class="choice-card-art"')&&source.includes('class="choice-card-rank">${rank}')&&source.includes('class="choice-card-footer"><i>✦</i>${u.cost}'),"战斗与编队棋子卡应以棋子图像为主体，并显示右上阶数和底部能量");
+assert.ok(source.includes('class="choice-card-footer growth-card-name">${item.name}')&&!source.includes("growth-list-art"),"成长之路卡片应复用图像与阶数结构，并在底部显示名称而非能量");
+assert.ok(growthCss.includes("grid-template-columns:repeat(auto-fill,minmax(108px,1fr))")&&growthCss.includes("grid-template-columns:repeat(2,minmax(0,1fr))"),"编队与成长棋子列表应改为更紧凑的多列卡片布局");
+assert.ok(pageHtml.includes('id="loadoutUnitPreview"')&&source.includes("function renderLoadoutPreview()")&&source.includes("<p>${u.desc}</p>"),"编队页卡片上方应显示当前聚焦棋子的基础描述");
+assert.ok(growthCss.includes(".choice-card-rank{")&&growthCss.includes(".choice-card-footer{")&&growthCss.includes(".loadout-unit-preview{"),"棋子卡阶数、底栏与编队预览面板应具有独立样式");
 assert.ok(pageHtml.includes('id="snakePitScreen"')&&pageHtml.includes('id="snakeCountRange"')&&pageHtml.includes('min="100" max="1000" step="100"'),"万蛇窟应提供100–1000条紫蛇数量选择界面");
 assert.ok(growthCss.includes(".ultimate-tile-glow{")&&growthCss.includes("@keyframes ultimateTileGlow"),"棋子释放大招时应在对应棋格显示动态底光");
 assert.ok(growthCss.includes(".growth-board-scale{position:absolute")&&growthCss.includes("transform-origin:top left"),"成长演示必须整体等比缩放原尺寸正式棋盘");
@@ -613,5 +668,9 @@ assert.equal(api.getGame().abilityEvents[0].t,api.getGame().abilityEvents[1].t,"
 api.updateAbilityEvents(.01);assert.equal(api.getGame().projectiles.length,2,"双车大招首轮应同时射出两弹");assert.notEqual(api.getGame().projectiles[0].y,api.getGame().projectiles[1].y,"双车大招应分成两条上下弹道");
 const sharedTwinQueen={type:"twinQueen",row:2,col:1,hp:950,maxHp:950,timer:0,rank:1,id:92};
 api.setGame(baseGame({preview:true,players:[sharedTwinQueen],abilityEvents:[],energy:0,energyCollected:0}));api.activateEnergyBean(sharedTwinQueen,{preview:true});assert.equal(api.getGame().abilityEvents.length,api.abilitySpecs.twinQueen.shots,"双后大招应保持30发，分为两排各15发");assert.equal(api.getGame().abilityEvents.filter(event=>event.barrel===0).length,15,"双后大招第一排应为15发");assert.equal(api.getGame().abilityEvents.filter(event=>event.barrel===1).length,15,"双后大招第二排应为15发");assert.equal(api.getGame().abilityEvents[0].t,api.getGame().abilityEvents[1].t,"双后大招两排应成对开火");api.updateAbilityEvents(.01);assert.equal(api.getGame().projectiles.length,6,"双后大招首轮应向三路各射出上下两弹");assert.notEqual(api.getGame().projectiles[0].y,api.getGame().projectiles[3].y,"双后大招每路应分成两条上下弹道");
+const beanSuperRook={type:"superRook",row:2,col:1,hp:1250,maxHp:1250,timer:0,rank:1,id:93};
+api.setGame(baseGame({preview:true,players:[beanSuperRook],abilityEvents:[],energy:0,energyCollected:0}));api.activateEnergyBean(beanSuperRook,{preview:true});assert.equal(api.getGame().abilityEvents.length,60,"超级车大招应排入60发普通车弹");assert.equal(Math.min(...api.getGame().abilityEvents.map(event=>event.angle)),-30,"超级车扇形上沿应为负30度");assert.equal(Math.max(...api.getGame().abilityEvents.map(event=>event.angle)),30,"超级车扇形下沿应为正30度");assert.equal(api.ultimateCycleSeconds(beanSuperRook),1.5,"超级车大招应在1.5秒内完成一轮");
+const beanSuperQueen={type:"superQueen",row:2,col:1,hp:1000,maxHp:1000,timer:0,rank:1,id:94};
+api.setGame(baseGame({preview:true,players:[beanSuperQueen],abilityEvents:[],energy:0,energyCollected:0}));api.activateEnergyBean(beanSuperQueen,{preview:true});assert.equal(api.getGame().abilityEvents.length,180,"超级后大招应排入180发普通后弹");assert.deepEqual(plain([1,2,3].map(row=>api.getGame().abilityEvents.filter(event=>event.row===row).length)),[60,60,60],"超级后应以连续三路各展开一组60发扇形");assert.equal(api.ultimateCycleSeconds(beanSuperQueen),1.5,"超级后的180发大招也应每1.5秒循环一次");api.updateAbilityEvents(.01);assert.equal(api.getGame().projectiles.length,3,"超级后大招首拍应从三路同时各射出一发");assert.ok(api.getGame().projectiles.every(projectile=>projectile.kind==='rook'),"超级车与超级后大招都应使用普通车弹体");
 
 console.log("成长之路与核心战斗机制测试通过");

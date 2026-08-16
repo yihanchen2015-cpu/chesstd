@@ -23,7 +23,15 @@ const UNITS = {
   twinQueen: { name:"双后", family:"后系秘藏", unlockKey:"doubleQueen", shape:"queen", cost:700, hp:950, cd:22, attack:70, attackMode:"flat", color:"#ffd37f", desc:"六连王令 · 每1.3秒向三路各发两枚70伤害普通炮弹" },
   iceBishop: { name:"冰象", family:"象系秘藏", unlockKey:"iceSculptures", shape:"bishop", cost:180, hp:680, cd:12, attack:95, attackMode:"arc", color:"#88dff2", desc:"冰封斜线 · 弧光减速敌军，同一目标三次命中后冻结" },
   flameBishop: { name:"焰象", family:"象系秘藏", unlockKey:"meltedIce", shape:"bishop", cost:195, hp:660, cd:12, attack:105, attackMode:"arc", burnDps:34, color:"#f28c52", desc:"熔岩斜线 · 点燃斜线敌军，并可熔化弧光经过的冰格" },
-  shieldKing: { name:"御盾王", family:"王系秘藏", unlockKey:"shieldDamage", shape:"king", cost:175, hp:1300, cd:16, attack:0, attackMode:"support", armor:.2, color:"#b8cfca", desc:"御令 · 每10秒生产30能量，并为相邻友军补充护甲" }
+  shieldKing: { name:"御盾王", family:"王系秘藏", unlockKey:"shieldDamage", shape:"king", cost:175, hp:1300, cd:16, attack:0, attackMode:"support", armor:.2, color:"#b8cfca", desc:"御令 · 每10秒生产30能量，并为相邻友军补充护甲" },
+  berserkerPawn: { name:"狂战兵", family:"兵系衍生", unlockAt:4, shape:"pawn", cost:100, hp:650, cd:9, attack:115, attackMode:"melee", color:"#d96a5f", desc:"血刃 · 每1.05秒近战；生命越低攻击越快，升阶后可吸血与横扫" },
+  bombardRook: { name:"炮车", family:"车系衍生", unlockAt:5, shape:"rook", cost:250, hp:950, cd:15, attack:130, attackMode:"arc", color:"#d59a58", desc:"重炮 · 每1.8秒轰击敌群，主目标周围敌军也会受到爆炸伤害" },
+  warKing: { name:"战王", family:"王系衍生", unlockAt:4, shape:"king", cost:160, hp:1050, cd:14, attack:0, attackMode:"support", color:"#dc775b", desc:"战旗 · 每9秒生产20能量，并推进相邻友军的攻击计时" },
+  guardianKnight: { name:"圣骑", family:"马系衍生", unlockAt:5, shape:"knight", cost:190, hp:980, cd:12, attack:125, attackMode:"leap", armor:.1, color:"#e4cf87", desc:"裁决冲锋 · 跃击并短暂眩晕敌军，升阶后为友军提供护甲" },
+  lightBishop: { name:"光象", family:"象系衍生", unlockAt:5, shape:"bishop", cost:210, hp:700, cd:12, attack:85, attackMode:"arc", color:"#f1dd9a", desc:"圣光 · 每1.45秒治疗最虚弱友军，同时以斜光攻击一名敌军" },
+  shadowQueen: { name:"影后", family:"后系衍生", unlockAt:6, shape:"queen", cost:500, hp:820, cd:17, attack:90, attackMode:"flat", color:"#a88acb", desc:"暗印 · 攻击三路内最虚弱敌军，三层暗印爆发额外伤害" },
+  superRook: { name:"超级车", family:"车系终极", unlockAt:6, shape:"rook", cost:400, hp:1250, cd:18, attack:105, attackMode:"flat", color:"#8ff1d7", desc:"四联炮台 · 每1.5秒向本路同时发射4枚普通车弹" },
+  superQueen: { name:"超级后", family:"后系终极", unlockAt:6, shape:"queen", cost:900, hp:1000, cd:24, attack:105, attackMode:"flat", color:"#b5f3dc", desc:"十二联王令 · 每1.5秒向连续三路各发射4枚普通后弹" }
 };
 
 const SPECIAL_UNLOCKS = {
@@ -56,13 +64,22 @@ const RANK_TRAITS = {
   twinQueen:[["六连王令","三路各由一枚后开火，每路连续发射2弹。"],["双后异议","两枚炮弹分别优先攻击不同目标，避免浪费火力。"],["左右议会","每第四轮分别支援上下最危险的一路。"],["王令接力","任一后系棋子开大后，双后立即免费齐射一轮。"],["双冠残局","场上只剩双后一种攻击棋时，复制所有射弹形成十二连令。"]],
   iceBishop:[["冰封斜线","冰弧使命中者减速，同一目标三次命中后冻结。"],["冰镜折返","冰弧抵达棋盘边缘后折返，再伤害一次最远目标。"],["霜桥","弧光经过友军时为其铺上吸收120伤害的霜甲。"],["冷却镜幕","冻结镜戏丑会封住悬浮镜，使其6秒不能反弹。"],["绝对零线","一条斜线上冻结两敌后，该斜线维持4秒寒流并持续伤害。"]],
   flameBishop:[["熔岩斜线","火弧点燃沿线敌军并熔化经过的冰面。"],["余烬写字","被熔化的格子留下火印，首个踏入敌军会被点燃。"],["冷热爆裂","命中减速或冻结目标时产生额外160伤害的蒸汽爆。"],["八卦焚阵","命中敌相时焚毁其召唤计时，并延后下一次召唤。"],["日珥回廊","火弧抵达边缘后沿另一条斜线回扫一次。"]],
-  shieldKing:[["御令","每10秒生产30能量，并给相邻友军补充100护甲。"],["王城垛口","相邻盾兵可替王系棋子承受一半伤害。"],["整军号令","每次生产使相邻棋子立刻推进0.5秒攻击计时。"],["护城税","友军护甲吸收每满500伤害，返还20能量。"],["移动王城","每次生产把护甲扩散到同路全部友军，且自身免疫砸碎一次。"]]
+  shieldKing:[["御令","每10秒生产30能量，并给相邻友军补充100护甲。"],["王城垛口","相邻盾兵可替王系棋子承受一半伤害。"],["整军号令","每次生产使相邻棋子立刻推进0.5秒攻击计时。"],["护城税","友军护甲吸收每满500伤害，返还20能量。"],["移动王城","每次生产把护甲扩散到同路全部友军，且自身免疫砸碎一次。"]],
+  berserkerPawn:[["血刃突进","持双刃攻击前方2格内最近的敌军。"],["逆境狂热","每损失20%生命，攻击频率提高10%。"],["饮血","每次命中恢复所造成伤害的30%。"],["斩敌暴怒","击败敌军后进入3秒暴怒，攻击频率再提高一倍。"],["猩红横扫","生命低于35%时，每次攻击同时斩击前方最多3名敌军。"]],
+  bombardRook:[["落点爆破","炮弹命中后，对目标周围1格敌军造成50%爆炸伤害。"],["广域弹头","爆炸半径扩大，额外波及最多4名敌军。"],["震荡弹坑","每第4炮使命中区域敌军减速3秒。"],["密集测算","优先轰击周围敌军数量最多的目标。"],["双响重炮","每第3炮在同一落点再次爆炸，第二次造成完整伤害。"]],
+  warKing:[["战旗号令","每9秒生产20能量，并让相邻友军提前1秒攻击。"],["鼓舞光环","相邻友军的攻击频率提高15%。"],["列阵护肩","每次号令为相邻友军补充100护甲。"],["战地救援","每次号令治疗生命比例最低的友军150生命。"],["全军共振","每第3次号令推进全体友军1秒攻击，并补充150护甲。"]],
+  guardianKnight:[["裁决冲锋","跃击附近目标并使其停顿0.6秒。"],["圣盾回响","每次命中为自身补充80护甲。"],["震地裁决","落点周围敌军也会停顿0.8秒。"],["护卫落点","跃击后为附近生命最低友军补充150护甲。"],["连环裁决","击败目标后立即寻找下一名敌军再次跃击。"]],
+  lightBishop:[["圣光双效","每轮治疗最虚弱友军，并攻击一名斜线敌军。"],["折射治疗","治疗光会再跳向第二名受伤友军，效果为50%。"],["圣光护甲","过量治疗转化为最多300点护甲。"],["净化棱光","治疗时使友军的下一轮攻击提前0.5秒。"],["黎明回廊","每第3轮治疗全体受伤友军，并同时照射两名斜线敌军。"]],
+  shadowQueen:[["暗影敕令","从三路中锁定生命最低的敌军并施加暗印。"],["蚀甲暗印","被标记敌军受到的伤害提高20%，持续2秒。"],["五路潜行","每第3轮将搜索范围扩展到全部5路。"],["影印转移","暗印爆发时会把一层暗印转移给附近敌军。"],["终局处刑","生命低于20%的三层暗印目标会直接受到额外350伤害。"]],
+  superRook:[["四弹齐射","每轮向本路并排发射4枚普通车弹。"],["四点火控","有多个目标时，4枚炮弹会优先分击不同目标。"],["双层弹匣","每第2轮齐射会在0.15秒后完整再射一轮。"],["补位追射","前一枚炮弹击破目标后，后续炮弹自动改攻下一目标。"],["四拍回响","每轮齐射都会在0.3秒后完整复奏；可与双层弹匣叠加。"]],
+  superQueen:[["三路四联","连续三路各并排发射4枚普通后弹。"],["分路议会","每路的4枚炮弹优先分击该路不同目标。"],["五路总令","每第3轮改为五路各发射4枚炮弹。"],["车后协同","五路齐射后推进全部车系棋子的攻击计时。"],["天幕复奏","每轮齐射都会在0.3秒后按原覆盖路线完整复奏。"]]
 };
 
 const ULT_TRAITS = {
   pawn:["地裂斩","挥剑劈地，前方2格出现裂痕，每格敌军受到500伤害。"],shieldPawn:["不动壁垒","回满生命并获得厚重能量护甲。"],spearPawn:["天降五矛","连续投出5支重矛，每支造成强化伤害。"],
   rook:["十五连炮","1.5秒内连发15枚炮弹。"],twinRook:["双膛风暴","1.5秒内连发30枚炮弹。"],iceRook:["冰封连炮","先冻结前方整行并造成不可避免的100伤害，再连发15枚冰弹。"],flameRook:["烈焰连炮","1.5秒内连发15枚正常威力火炮弹。"],poisonRook:["巨毒碾路","推出沿地面滚动的巨大毒球，沿途每名敌军受到1500伤害。"],
-  king:["王室宝库","立刻获得大量能量并完全恢复生命。"],royalKing:["黄金盛典","获得巨量能量并治疗全体友军。"],shieldKing:["万盾朝宗","全体友军获得护甲，并立即获得300能量。"],knight:["贯阵冲锋","沿本行冲锋并重创前方最多5名敌军。"],stormKnight:["万雷天牢","对场上所有敌军依次降下雷击。"],frostKnight:["极寒奔袭","冰影冲过全场五路，造成伤害并冻结全部敌军。"],bishop:["裁决斜线","两条斜线同时爆发，重创路径上的敌军。"],twinBishop:["双象裁决","强化的交叉斜光清扫全部对角线。"],iceBishop:["冰晶圣裁","冻结四条斜线上的全部敌军并生成霜甲。"],flameBishop:["赤日圣裁","两轮火焰斜线焚烧敌军并熔化全场冰面。"],poisonBishop:["万蛊星盘","全场敌军染上强化剧毒，且8秒内无法回复。"],queen:["三路连炮","向本路及相邻两路同时倾泻普通车弹。"],twinQueen:["双冠齐射","两位后向三路倾泻30轮双发炮弹。"],prismQueen:["三路虹裁","三路棱镜光束高速连射并贯穿战场。"]
+  king:["王室宝库","立刻获得大量能量并完全恢复生命。"],royalKing:["黄金盛典","获得巨量能量并治疗全体友军。"],shieldKing:["万盾朝宗","全体友军获得护甲，并立即获得300能量。"],knight:["贯阵冲锋","沿本行冲锋并重创前方最多5名敌军。"],stormKnight:["万雷天牢","对场上所有敌军依次降下雷击。"],frostKnight:["极寒奔袭","冰影冲过全场五路，造成伤害并冻结全部敌军。"],bishop:["裁决斜线","两条斜线同时爆发，重创路径上的敌军。"],twinBishop:["双象裁决","强化的交叉斜光清扫全部对角线。"],iceBishop:["冰晶圣裁","冻结四条斜线上的全部敌军并生成霜甲。"],flameBishop:["赤日圣裁","两轮火焰斜线焚烧敌军并熔化全场冰面。"],poisonBishop:["万蛊星盘","全场敌军染上强化剧毒，且8秒内无法回复。"],queen:["三路连炮","向本路及相邻两路同时倾泻普通车弹。"],twinQueen:["双冠齐射","两位后向三路倾泻30轮双发炮弹。"],prismQueen:["三路虹裁","三路棱镜光束高速连射并贯穿战场。"],
+  berserkerPawn:["猩红旋风","旋转双刃重创周围敌军，并按命中数量恢复生命。"],bombardRook:["天火覆盖","锁定全场最多8名敌军降下重炮，爆炸波及其周围目标。"],warKing:["全军总攻","立即获得150能量，全军补充护甲并立刻发动下一轮攻击。"],guardianKnight:["圣裁奔袭","连续冲击全场敌军，造成伤害并使其停顿。"],lightBishop:["普照黎明","大幅治疗全体友军、补充护甲，并以圣光灼击全部敌军。"],shadowQueen:["无光终局","引爆全场暗印；未被标记的敌军也会被刻下一层暗印。"],superRook:["六十度弹幕","从所在位置展开60度扇形，1.5秒内发射60枚普通车弹。"],superQueen:["三路天幕","以连续三路为基准展开三组60度扇形，1.5秒内发射180枚普通后弹。"]
 };
 
 const BOARD_RULES = {rows:5,cols:9};
@@ -72,7 +89,8 @@ const ROOK_OVERLOAD = {chance:.2,shots:4,interval:.08};
 const ABILITY_SPECS = {
   pawn:{kind:"slam",frontCells:2,damage:500},shieldPawn:{kind:"fortress",armor:2000,fullHeal:true},spearPawn:{kind:"rapid",shots:5,interval:.2,damage:350,projectile:"spearVolley"},
   rook:{kind:"rapid",shots:15,interval:.1,damageMin:90,damageMax:120,projectile:"rook"},twinRook:{kind:"rapid",shots:30,interval:.05,damageMin:80,damageMax:120,projectile:"twinRook"},iceRook:{kind:"rapid",shots:15,interval:.1,damage:75,freezeDamage:100,freezeFront:true,projectile:"iceRook"},flameRook:{kind:"rapid",shots:15,interval:.1,damage:95,burnSeconds:3,burnDps:40,projectile:"flameRook"},poisonRook:{kind:"roller",damage:1500,projectile:"giantPoison"},
-  king:{kind:"support",energy:500,fullHeal:true},royalKing:{kind:"support",energy:800,healAll:500},shieldKing:{kind:"support",energy:300,armorAll:450},knight:{kind:"charge",damage:600,maxTargets:5},stormKnight:{kind:"all",damage:600},frostKnight:{kind:"all",damage:420,freezeSeconds:4},bishop:{kind:"diagonal",damage:900},twinBishop:{kind:"diagonal",damage:1100},iceBishop:{kind:"diagonal",damage:650,freezeSeconds:5},flameBishop:{kind:"diagonal",damage:720,burnSeconds:6,burnDps:55},poisonBishop:{kind:"all",damage:180,poisonSeconds:10,poisonDps:65},queen:{kind:"tripleRapid",shots:15,interval:.1,damageMin:90,damageMax:120,projectile:"rook",lanes:3},twinQueen:{kind:"tripleRapid",shots:30,interval:.05,damageMin:70,damageMax:120,projectile:"rook",lanes:3},prismQueen:{kind:"piercingRapid",shots:15,interval:.1,damage:50,lanes:3,pierce:true}
+  king:{kind:"support",energy:500,fullHeal:true},royalKing:{kind:"support",energy:800,healAll:500},shieldKing:{kind:"support",energy:300,armorAll:450},knight:{kind:"charge",damage:600,maxTargets:5},stormKnight:{kind:"all",damage:600},frostKnight:{kind:"all",damage:420,freezeSeconds:4},bishop:{kind:"diagonal",damage:900},twinBishop:{kind:"diagonal",damage:1100},iceBishop:{kind:"diagonal",damage:650,freezeSeconds:5},flameBishop:{kind:"diagonal",damage:720,burnSeconds:6,burnDps:55},poisonBishop:{kind:"all",damage:180,poisonSeconds:10,poisonDps:65},queen:{kind:"tripleRapid",shots:15,interval:.1,damageMin:90,damageMax:120,projectile:"rook",lanes:3},twinQueen:{kind:"tripleRapid",shots:30,interval:.05,damageMin:70,damageMax:120,projectile:"rook",lanes:3},prismQueen:{kind:"piercingRapid",shots:15,interval:.1,damage:50,lanes:3,pierce:true},
+  berserkerPawn:{kind:"whirl",damage:650,radius:3,healPerHit:120},bombardRook:{kind:"bombard",damage:500,maxTargets:8,splash:.5},warKing:{kind:"command",energy:150,armorAll:300},guardianKnight:{kind:"all",damage:520,freezeSeconds:2.5},lightBishop:{kind:"radiance",damage:400,healAll:650,armorAll:200},shadowQueen:{kind:"all",damage:700,markAll:true},superRook:{kind:"fan",shots:60,perLane:60,interval:.025,damageMin:90,damageMax:120,projectile:"rook",fanDegrees:60,lanes:1},superQueen:{kind:"fan",shots:180,perLane:60,interval:.025,damageMin:90,damageMax:120,projectile:"rook",fanDegrees:60,lanes:3}
 };
 
 const ENEMIES = {
