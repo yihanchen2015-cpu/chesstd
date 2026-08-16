@@ -14,7 +14,7 @@
 
     <section id="homeScreen" class="screen active home-screen">
       <header class="brand-bar">
-        <div class="mini-brand"><span>♟</span> ROYAL GRID STUDIO</div>
+        <div class="mini-brand"><span class="brand-piece"><i></i></span> ROYAL GRID STUDIO</div>
         <button class="icon-button" data-open="archiveScreen" title="敌军资料库">◎</button>
       </header>
 
@@ -26,13 +26,18 @@
 
           <div class="home-actions">
             <button class="primary-button story-button" id="storyButton">
-              <span class="button-glyph">♔</span>
+              <span class="button-glyph drawn-crown"><i></i></span>
               <span><b>故事模式</b><small>营救被紫蛇掳走的挚友</small></span>
               <i>→</i>
             </button>
             <button class="primary-button battle-button" id="battleButton">
-              <span class="button-glyph">⚔</span>
+              <span class="button-glyph battle-mark">战</span>
               <span><b>开始对战</b><small>选择规则，挑战极限</small></span>
+              <i>→</i>
+            </button>
+            <button class="primary-button growth-button" id="growthButton">
+              <span class="button-glyph growth-mark"><i></i></span>
+              <span><b>成长之路</b><small>预览升阶质变与能量豆大招</small></span>
               <i>→</i>
             </button>
           </div>
@@ -48,11 +53,11 @@
           <div class="red-seal seal-one">楚</div>
           <div class="red-seal seal-two">漢</div>
           <div class="king-piece">
-            <div class="king-cross">✦</div>
-            <div class="king-crown">♛</div>
+            <div class="king-cross"><i></i></div>
+            <div class="king-crown"><i></i><i></i><i></i></div>
             <div class="king-head"></div>
             <div class="king-neck"></div>
-            <div class="king-body"><span>♔</span></div>
+            <div class="king-body"><span></span></div>
             <div class="king-base"></div>
           </div>
           <div class="enemy-disc disc-a"><span>炮</span></div>
@@ -90,6 +95,81 @@
       <main class="challenge-grid" id="challengeGrid"></main>
     </section>
 
+    <section id="snakePitScreen" class="screen menu-screen snake-pit-screen">
+      <header class="page-header">
+        <button class="back-button" id="snakePitBack">←</button>
+        <div><span class="eyebrow">FUN · INFINITE ULT</span><h2>万蛇窟</h2></div>
+        <div class="header-note">选择紫蛇总数</div>
+      </header>
+      <main class="snake-pit-layout">
+        <aside class="snake-pit-brief">
+          <span class="section-number">TEN THOUSAND SERPENTS</span>
+          <div class="snake-pit-sigil"><i></i><b>蛇</b></div>
+          <h3>布阵之后，<br />大招永不停歇。</h3>
+          <p>所有上场棋子无视能量豆数量，持续自动释放各自大招。持续射击型棋子只播放一次开场演出，随后按大招周期循环开火。</p>
+        </aside>
+        <section class="snake-count-panel">
+          <span class="eyebrow">SERPENT COUNT</span>
+          <div class="snake-count-readout"><output id="snakeCountValue">100</output><span>条紫蛇</span></div>
+          <label for="snakeCountRange">敌潮规模</label>
+          <input id="snakeCountRange" type="range" min="100" max="1000" step="100" value="100" />
+          <div class="snake-range-labels"><span>100</span><span>1000</span></div>
+          <div class="snake-presets">
+            <button data-snake-count="100">100</button><button data-snake-count="300">300</button><button data-snake-count="500">500</button><button data-snake-count="700">700</button><button data-snake-count="1000">1000</button>
+          </div>
+          <div class="snake-rule-summary">
+            <div><span>威胁等级</span><b id="snakeThreatValue">侵袭级</b></div>
+            <div><span>战场调度</span><b>总量结算 · 分批入场</b></div>
+            <div><span>我方规则</span><b>无限能量 · 无限大招</b></div>
+          </div>
+          <button class="primary-button compact" id="snakePitStart">选择阵容 · 进入布阵</button>
+        </section>
+      </main>
+    </section>
+
+    <section id="customRoomScreen" class="screen menu-screen custom-room-screen">
+      <header class="page-header">
+        <button class="back-button" id="customRoomBack">←</button>
+        <div><span class="eyebrow">CUSTOM ROOM</span><h2>自定义房间</h2></div>
+        <div class="custom-room-summary" id="customRoomSummary">敌军 10 · 我方 3 种</div>
+      </header>
+      <main class="custom-room-layout">
+        <section class="custom-panel custom-enemy-panel">
+          <header><div><span>ENEMY FORMATION</span><h3>编排敌军</h3></div><button id="customAddEnemy">＋ 添加一队</button></header>
+          <p>每一队可以分别指定棋子类型、数量和出现路线。相同路线的敌军会按纵深排队入场。</p>
+          <div class="custom-enemy-head"><span>敌军种类</span><span>数量</span><span>出兵行</span><span></span></div>
+          <div class="custom-enemy-rows" id="customEnemyRows"></div>
+          <div class="custom-room-note">每队 1–100 枚，房间总数最多 300 枚；“随机行”会把这一队均匀打散到五路。</div>
+        </section>
+        <section class="custom-panel custom-unit-panel">
+          <header><div><span>ROYAL FORMATION</span><h3>设定我方棋子与阶位</h3></div><b><i id="customUnitCount">3</i> / 6</b></header>
+          <p>选择最多6种棋子。阶位只在本房间内生效，不受故事解锁和当前培养进度限制。</p>
+          <div class="custom-unit-grid" id="customUnitGrid"></div>
+        </section>
+      </main>
+      <footer class="custom-room-footer">
+        <div><span>房间规则</span><b>2000初始能量 · 正常部署冷却 · 布阵后手动来敌</b></div>
+        <button class="primary-button compact" id="customRoomStart">确认房间 · 选择战前增益</button>
+      </footer>
+    </section>
+
+    <section id="difficultyScreen" class="screen menu-screen difficulty-screen">
+      <header class="page-header">
+        <button class="back-button" id="difficultyBack">←</button>
+        <div><span class="eyebrow">DIFFICULTY</span><h2>选择难度</h2></div>
+        <div class="header-note" id="difficultyMission">六波坚守</div>
+      </header>
+      <main class="difficulty-layout">
+        <aside class="difficulty-brief">
+          <span class="section-number">RULE SET</span>
+          <h3 id="difficultyTitle">六波坚守</h3>
+          <p id="difficultyText"></p>
+          <span id="difficultyObjective"></span>
+        </aside>
+        <section class="difficulty-grid" id="difficultyGrid"></section>
+      </main>
+    </section>
+
     <section id="archiveScreen" class="screen menu-screen archive-screen">
       <header class="page-header">
         <button class="back-button" data-open="homeScreen">←</button>
@@ -102,11 +182,77 @@
       </main>
     </section>
 
+    <section id="growthScreen" class="screen menu-screen growth-screen">
+      <header class="page-header">
+        <button class="back-button" data-open="homeScreen">←</button>
+        <div><span class="eyebrow">PATH OF GROWTH</span><h2>成长之路</h2></div>
+        <div class="header-note">持续实战演示 · 敌我按正式参数行动</div>
+      </header>
+      <main class="growth-layout">
+        <aside class="growth-roster" id="growthRoster"></aside>
+        <section class="growth-workbench">
+          <header class="growth-unit-head">
+            <div id="growthUnitArt"></div>
+            <div><span id="growthFamily">基础棋</span><h3 id="growthUnitName">兵</h3><p id="growthUnitDesc"></p></div>
+            <div class="growth-current"><small>当前培养</small><b id="growthCurrentRank">1 阶</b></div>
+          </header>
+          <div class="growth-tabs" id="growthTabs"></div>
+          <div class="growth-demo-shell">
+            <div class="growth-demo-label"><span>实战演示窗</span><b id="growthDemoTitle">1阶 · 本职觉醒</b></div>
+            <div class="growth-demo-stage" id="growthDemoStage" aria-live="polite"></div>
+            <button class="growth-replay" id="growthReplay"><span>↻</span> 重开本轮</button>
+          </div>
+          <article class="growth-trait-card">
+            <span id="growthTraitTag">RANK I</span>
+            <h4 id="growthTraitName">本职觉醒</h4>
+            <p id="growthTraitText"></p>
+            <div id="growthTraitMeta"></div>
+          </article>
+        </section>
+      </main>
+    </section>
+
+    <section id="loadoutScreen" class="screen menu-screen loadout-screen">
+      <header class="page-header">
+        <button class="back-button" id="loadoutBack">←</button>
+        <div><span class="eyebrow">BATTLE FORMATION</span><h2>选择上场棋子</h2></div>
+        <div class="loadout-counter"><b id="loadoutCount">3</b><span> / 6 已选择</span></div>
+      </header>
+      <main class="loadout-layout">
+        <aside class="loadout-brief">
+          <span class="section-number">FORMATION</span>
+          <h3 id="loadoutMission">六波坚守</h3>
+          <p>每场最多携带6种棋子。点击卡牌加入或移出编队，锁定棋子会随故事推进逐步解锁。</p>
+          <div class="loadout-slots" id="loadoutSlots"></div>
+          <button class="primary-button compact loadout-start" id="loadoutStart">确认编队 · 进入战场</button>
+        </aside>
+        <section class="loadout-roster" id="loadoutRoster"></section>
+      </main>
+    </section>
+
+    <section id="buffScreen" class="screen menu-screen buff-screen">
+      <header class="page-header">
+        <button class="back-button" id="buffBack">←</button>
+        <div><span class="eyebrow">BATTLE BLESSING</span><h2>选择战前增益</h2></div>
+        <div class="header-note" id="buffMission">六波坚守</div>
+      </header>
+      <main class="buff-layout">
+        <aside class="buff-brief">
+          <span class="section-number">ONE CHOICE</span>
+          <h3>每局限选一个</h3>
+          <p>增益仅在本场战斗中生效。根据玩法、难度和上场棋子选择最适合的战术支援。</p>
+          <div id="buffSelectionText">尚未选择增益</div>
+          <button class="primary-button compact" id="buffStart" disabled>携带增益 · 进入战场</button>
+        </aside>
+        <section class="buff-grid" id="buffGrid"></section>
+      </main>
+    </section>
+
     <section id="dialogueScreen" class="screen dialogue-screen">
       <div class="dialogue-scene" id="dialogueScene">
         <button class="dialogue-skip" id="dialogueSkip">跳过对话 ↗</button>
         <div class="scene-title" id="sceneTitle"></div>
-        <div class="portrait portrait-left" id="portraitLeft"><span>♔</span></div>
+        <div class="portrait portrait-left" id="portraitLeft"><span class="portrait-placeholder"></span></div>
         <div class="portrait portrait-right" id="portraitRight"><span>蛇</span></div>
         <div class="dialogue-box">
           <div class="speaker" id="dialogueSpeaker">亚瑟</div>
@@ -125,7 +271,10 @@
           <div class="objective-track"><i id="objectiveBar"></i></div>
         </div>
         <div class="battle-resources">
-          <div class="energy-counter"><span>✦</span><b id="energyValue">250</b><small>能量</small></div>
+          <button class="bean-counter" id="beanButton" title="选中能量豆，再点击一枚我方棋子发动爆发技">
+            <span class="bean-icon"><i></i></span><b id="beanValue">0</b><small>能量豆</small>
+          </button>
+          <div class="energy-counter" id="energyCounter"><span>✦</span><b id="energyValue">250</b><small>能量</small></div>
           <button id="pauseButton">Ⅱ</button>
         </div>
       </header>
@@ -145,6 +294,7 @@
             <span class="battle-tip" id="battleTip">选择棋子，再点击空格部署</span>
             <span><i class="legend enemy-legend"></i> 汉界军</span>
           </div>
+          <button class="start-assault" id="startAssault">阵型完成 · 开始来敌</button>
         </section>
       </main>
 
@@ -155,7 +305,7 @@
 
     <section id="resultScreen" class="screen result-screen">
       <div class="result-card">
-        <div class="result-emblem" id="resultEmblem">♔</div>
+        <div class="result-emblem" id="resultEmblem">胜</div>
         <span class="eyebrow" id="resultEyebrow">MISSION COMPLETE</span>
         <h2 id="resultTitle">防线守住了</h2>
         <p id="resultText"></p>
@@ -174,6 +324,8 @@
 
     <div id="toast" class="toast"></div>
   </div>
+  <script src="js/game-data.js"></script>
+  <script src="js/growth-mode.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
