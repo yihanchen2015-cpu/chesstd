@@ -105,7 +105,7 @@ function confirmSnakePit(){
 }
 function defaultCustomRoom(){return {enemies:[{type:'soldier',count:10,row:-1}],units:[{type:'pawn',rank:1},{type:'rook',rank:1},{type:'king',rank:1}]};}
 function normalizeCustomRoom(value){
-  const room=value&&Array.isArray(value.enemies)&&Array.isArray(value.units)?structuredClone(value):defaultCustomRoom();room.enemies=room.enemies.filter(e=>ENEMIES[e.type]).slice(0,12).map(e=>({type:e.type,count:clamp(Math.round(+e.count||1),1,100),row:clamp(Math.round(Number.isFinite(+e.row)?+e.row:-1),-1,4)}));room.units=room.units.filter(u=>UNITS[u.type]).slice(0,6).map(u=>({type:u.type,rank:clamp(Math.round(+u.rank||1),1,5)}));if(!room.enemies.length)room.enemies=defaultCustomRoom().enemies;if(!room.units.length)room.units=defaultCustomRoom().units;return room;
+  const room=value&&Array.isArray(value.enemies)&&Array.isArray(value.units)?structuredClone(value):defaultCustomRoom();room.enemies=room.enemies.filter(e=>ENEMIES[e.type]).slice(0,12).map(e=>({type:e.type,count:clamp(Math.round(+e.count||1),1,100),row:clamp(Math.round(Number.isFinite(+e.row)?+e.row:-1),-1,4)}));room.units=room.units.filter(u=>UNITS[u.type]&&!UNITS[u.type].fusionOnly).slice(0,6).map(u=>({type:u.type,rank:clamp(Math.round(+u.rank||1),1,5)}));if(!room.enemies.length)room.enemies=defaultCustomRoom().enemies;if(!room.units.length)room.units=defaultCustomRoom().units;return room;
 }
 function openCustomRoom(){customRoomDraft=normalizeCustomRoom(save.customRoom);renderCustomRoom();showScreen('customRoomScreen');}
 function renderCustomRoom(){
@@ -113,7 +113,7 @@ function renderCustomRoom(){
   $("#customRoomSummary").textContent=`敌军 ${total} · 我方 ${customRoomDraft.units.length} 种`;$("#customUnitCount").textContent=customRoomDraft.units.length;
   $("#customEnemyRows").innerHTML=customRoomDraft.enemies.map((entry,index)=>`<div class="custom-enemy-row" data-custom-enemy="${index}" style="--enemy-accent:${ENEMIES[entry.type].boss?'#9c3b82':'#a43c32'}"><select data-custom-enemy-type>${enemyOptions}</select><input data-custom-enemy-count type="number" min="1" max="100" value="${entry.count}" aria-label="敌军数量"><select data-custom-enemy-row>${rowOptions}</select><button data-custom-enemy-remove title="删除这一队">×</button></div>`).join('');
   $$("[data-custom-enemy]").forEach(row=>{const index=+row.dataset.customEnemy,entry=customRoomDraft.enemies[index],type=$("[data-custom-enemy-type]",row),count=$("[data-custom-enemy-count]",row),lane=$("[data-custom-enemy-row]",row);type.value=entry.type;lane.value=String(entry.row);type.onchange=()=>{entry.type=type.value;renderCustomRoom();};count.oninput=()=>{entry.count=clamp(Math.round(+count.value||1),1,100);const sum=customRoomDraft.enemies.reduce((total,e)=>total+e.count,0);$("#customRoomSummary").textContent=`敌军 ${sum} · 我方 ${customRoomDraft.units.length} 种`;$("#customRoomStart").disabled=!customRoomDraft.units.length||!sum||sum>300;};count.onchange=renderCustomRoom;lane.onchange=()=>{entry.row=+lane.value;renderCustomRoom();};$("[data-custom-enemy-remove]",row).onclick=()=>{if(customRoomDraft.enemies.length===1){toast('至少保留一支敌军队伍');return;}customRoomDraft.enemies.splice(index,1);renderCustomRoom();};});
-  $("#customUnitGrid").innerHTML=Object.entries(UNITS).map(([type,u])=>{const chosen=customRoomDraft.units.find(x=>x.type===type),rank=chosen?.rank||1;return `<div class="custom-unit-entry ${chosen?'selected':''}" data-custom-unit="${type}" style="--unit-color:${u.color}" role="button" tabindex="0">${unitArt(type,'compact-art')}<strong>${u.name}</strong><small>${u.family}</small><span class="custom-rank-picker">${Array.from({length:5},(_,i)=>`<button class="${rank===i+1?'active':''}" data-custom-rank="${i+1}" title="设为${i+1}阶">${i+1}阶</button>`).join('')}</span></div>`;}).join('');
+  $("#customUnitGrid").innerHTML=Object.entries(UNITS).filter(([,u])=>!u.fusionOnly).map(([type,u])=>{const chosen=customRoomDraft.units.find(x=>x.type===type),rank=chosen?.rank||1;return `<div class="custom-unit-entry ${chosen?'selected':''}" data-custom-unit="${type}" style="--unit-color:${u.color}" role="button" tabindex="0">${unitArt(type,'compact-art')}<strong>${u.name}</strong><small>${u.family}</small><span class="custom-rank-picker">${Array.from({length:5},(_,i)=>`<button class="${rank===i+1?'active':''}" data-custom-rank="${i+1}" title="设为${i+1}阶">${i+1}阶</button>`).join('')}</span></div>`;}).join('');
   $$("[data-custom-unit]").forEach(card=>{const type=card.dataset.customUnit;card.onclick=event=>{if(event.target.closest('[data-custom-rank]'))return;const index=customRoomDraft.units.findIndex(u=>u.type===type);if(index>=0)customRoomDraft.units.splice(index,1);else if(customRoomDraft.units.length>=6){toast('自定义房间最多选择6种我方棋子');return;}else customRoomDraft.units.push({type,rank:1});renderCustomRoom();};$$("[data-custom-rank]",card).forEach(button=>button.onclick=event=>{event.stopPropagation();let chosen=customRoomDraft.units.find(u=>u.type===type);if(!chosen){if(customRoomDraft.units.length>=6){toast('自定义房间最多选择6种我方棋子');return;}chosen={type,rank:+button.dataset.customRank};customRoomDraft.units.push(chosen);}else chosen.rank=+button.dataset.customRank;renderCustomRoom();});});
   $("#customRoomStart").disabled=!customRoomDraft.units.length||!total||total>300;
 }
@@ -142,9 +142,13 @@ function startStory(index){
 function startChallenge(config,difficulty='standard'){const difficultyData=DIFFICULTIES[difficulty]||DIFFICULTIES.standard;openLoadout({kind:'challenge',...config,title:`${config.title} · ${difficultyData.name}`,difficulty,difficultyData});}
 
 function specialUnlockRule(type){return SPECIAL_UNLOCKS[type]||null;}
-function isUnitUnlocked(type){const u=UNITS[type],rule=specialUnlockRule(type);return !!u&&(u.unlockKey?(!!save.specialUnlocked[type]||(!rule?.battleOnly&&(save.unlockProgress[u.unlockKey]||0)>=rule.target)):save.storyUnlocked>=(u.unlockAt||99));}
+function isUnitUnlocked(type){
+  const u=UNITS[type];if(!u)return false;if(u.fusionOnly)return true;
+  const rule=specialUnlockRule(type);if(u.unlockKey)return !!save.specialUnlocked[type]||(!rule?.battleOnly&&(save.unlockProgress[u.unlockKey]||0)>=rule.target);
+  return save.storyUnlocked>=(u.unlockAt||99);
+}
 function unlockProgressText(type){
-  const rule=specialUnlockRule(type),u=UNITS[type];if(!rule)return `第 ${u.unlockAt} 章解锁`;if(save.specialUnlocked[type])return `特殊条件已完成 · ${rule.name}`;
+  const rule=specialUnlockRule(type),u=UNITS[type];if(u?.fusionOnly)return `战斗中以${UNITS[u.fusionSource].name}种在${UNITS[u.fusionBase].name}上融合`;if(!rule)return `第 ${u.unlockAt} 章解锁`;if(save.specialUnlocked[type])return `特殊条件已完成 · ${rule.name}`;
   const value=rule.battleOnly?(game?.used?.queen||0):(save.unlockProgress[u.unlockKey]||0);return `${rule.description} · ${Math.min(rule.target,Math.floor(value))}/${rule.target}`;
 }
 function unlockSpecial(type){if(save.specialUnlocked[type])return false;save.specialUnlocked[type]=true;persist();toast(`秘藏棋子解锁 · ${UNITS[type].name}`);return true;}
@@ -153,7 +157,7 @@ function recordUnlockProgress(key,amount=1){
   Object.entries(UNITS).filter(([,u])=>u.unlockKey===key).forEach(([type])=>{const rule=specialUnlockRule(type);if(rule&&!rule.battleOnly&&save.unlockProgress[key]>=rule.target)unlockSpecial(type);});persist();
 }
 function openLoadout(config){
-  pendingBattle=config;const available=Object.keys(UNITS).filter(isUnitUnlocked),remembered=(save.lastLoadout||[]).filter(k=>available.includes(k));selectedLoadout=(remembered.length?remembered:['pawn','rook','king'].filter(k=>available.includes(k))).slice(0,6);loadoutFocusType=selectedLoadout[0]||available[0]||'pawn';renderLoadout();showScreen('loadoutScreen');
+  pendingBattle=config;const available=Object.keys(UNITS).filter(type=>!UNITS[type].fusionOnly&&isUnitUnlocked(type)),remembered=(save.lastLoadout||[]).filter(k=>available.includes(k));selectedLoadout=(remembered.length?remembered:['pawn','rook','king'].filter(k=>available.includes(k))).slice(0,6);loadoutFocusType=selectedLoadout[0]||available[0]||'pawn';renderLoadout();showScreen('loadoutScreen');
 }
 function renderLoadoutPreview(){
   const type=UNITS[loadoutFocusType]?loadoutFocusType:(selectedLoadout[0]||'pawn'),u=UNITS[type],rank=save.ranks[type]||1,selected=selectedLoadout.includes(type),unlocked=isUnitUnlocked(type);$("#loadoutUnitPreview").style.setProperty('--unit-color',u.color);$("#loadoutUnitPreview").innerHTML=`<span class="loadout-preview-art">${unitArt(type,'loadout-preview-piece')}</span><div><span>${u.family} · ${unlocked?'已解锁':unlockProgressText(type)}</span><h3>${u.name}</h3><p>${u.desc}</p></div><aside><small>当前阶位</small><b>${rank}阶</b><i>${selected?'✓ 已加入编队':`✦ ${u.cost} 能量`}</i></aside>`;
@@ -161,7 +165,7 @@ function renderLoadoutPreview(){
 function renderLoadout(){
   $("#loadoutMission").textContent=pendingBattle?.title||'战斗编队';$("#loadoutCount").textContent=selectedLoadout.length;
   $("#loadoutSlots").innerHTML=Array.from({length:6},(_,i)=>{const k=selectedLoadout[i],u=k&&UNITS[k];return `<span class="loadout-slot ${u?'filled':''}">${u?`${unitArt(k,'compact-art')}<small>${u.name}</small>`:'<b>＋</b><small>空位</small>'}</span>`;}).join('');
-  $("#loadoutRoster").innerHTML=Object.entries(UNITS).map(([k,u])=>{const unlocked=isUnitUnlocked(k),selected=selectedLoadout.includes(k),state=unlocked?(selected?'已上场':'点击选择'):unlockProgressText(k),rank=save.ranks[k]||1;return `<button class="roster-card ${selected?'selected':''} ${unlocked?'':'locked'} ${loadoutFocusType===k?'focused':''}" data-unit="${k}" style="--unit-color:${u.color}" title="${u.name} · ${u.desc} · ${state}" aria-label="${u.name}，${rank}阶，需要${u.cost}能量，${state}" ${unlocked?'':'disabled'}><span class="choice-card-art">${unitArt(k,'choice-art')}</span><span class="choice-card-rank">${rank}</span><span class="choice-card-footer"><i>✦</i>${u.cost}</span></button>`;}).join('');
+  $("#loadoutRoster").innerHTML=Object.entries(UNITS).filter(([,u])=>!u.fusionOnly).map(([k,u])=>{const unlocked=isUnitUnlocked(k),selected=selectedLoadout.includes(k),state=unlocked?(selected?'已上场':'点击选择'):unlockProgressText(k),rank=save.ranks[k]||1;return `<button class="roster-card ${selected?'selected':''} ${unlocked?'':'locked'} ${loadoutFocusType===k?'focused':''}" data-unit="${k}" style="--unit-color:${u.color}" title="${u.name} · ${u.desc} · ${state}" aria-label="${u.name}，${rank}阶，需要${u.cost}能量，${state}" ${unlocked?'':'disabled'}><span class="choice-card-art">${unitArt(k,'choice-art')}</span><span class="choice-card-rank">${rank}</span><span class="choice-card-footer"><i>✦</i>${u.cost}</span></button>`;}).join('');
   $$(".roster-card:not(.locked)").forEach(el=>{el.onclick=()=>toggleLoadout(el.dataset.unit);el.onmouseenter=()=>{loadoutFocusType=el.dataset.unit;renderLoadoutPreview();};el.onfocus=()=>{loadoutFocusType=el.dataset.unit;renderLoadoutPreview();};});renderLoadoutPreview();$("#loadoutStart").disabled=selectedLoadout.length===0;
 }
 function toggleLoadout(type){loadoutFocusType=type;const index=selectedLoadout.indexOf(type);if(index>=0)selectedLoadout.splice(index,1);else if(selectedLoadout.length>=6){toast('每场最多选择6种棋子');renderLoadoutPreview();return;}else selectedLoadout.push(type);renderLoadout();}
@@ -190,10 +194,19 @@ function finishDialogue(){ const cb=dialogue?.onDone; dialogue=null; if(cb) cb()
 
 function buildGridInto(grid,onCell=null){
   grid.innerHTML="";
-  for(let r=0;r<BOARD_RULES.rows;r++) for(let c=0;c<BOARD_RULES.cols;c++){
-    const cell=document.createElement("div"); cell.className="grid-cell"; cell.dataset.row=r; cell.dataset.col=c;
-    if(onCell)cell.onclick=()=>onCell(r,c);grid.append(cell);
+  for(let r=-BOARD_RULES.prep;r<BOARD_RULES.rows+BOARD_RULES.prep;r++) for(let c=-BOARD_RULES.prep;c<BOARD_RULES.cols+BOARD_RULES.prep;c++){
+    const prep=r<0||r>=BOARD_RULES.rows||c<0||c>=BOARD_RULES.cols,cell=document.createElement("div");cell.className=`grid-cell ${(r+c)&1?'dark-cell':'light-cell'} ${prep?'prep-cell':''}`;cell.dataset.row=r;cell.dataset.col=c;cell.title=prep?'准备行/列 · 不可部署':'';
+    if(onCell&&!prep)cell.onclick=()=>onCell(r,c);grid.append(cell);
   }
+}
+function boardXPercent(x){return (x+BOARD_RULES.prep)*100/BOARD_RULES.viewCols;}
+function boardYPercent(y){return (y+BOARD_RULES.prep)*100/BOARD_RULES.viewRows;}
+function battlefieldTheme(config){
+  if(config.theme)return config.theme;
+  if(config.kind==='story')return ['grassland','cannon','steppe','armored','trick','snakePit'][config.storyIndex]||'classic';
+  if(config.id==='rush')return 'dusk';
+  if(config.id==='protect')return 'royal';
+  return 'classic';
 }
 function buildGrid(){
   buildGridInto($("#grid"),placeSelected);
@@ -208,6 +221,7 @@ function beginGame(config){
   if(config.protect){
     const p=createPlayer('king',2,0,true); p.hp=1500; p.maxHp=1500; game.players.push(p);
   }
+  $("#board").dataset.theme=battlefieldTheme(config);
   renderUnitTray(); updateGameHeader(); renderEntities(); showScreen("gameScreen");
   $("#missionTitle").textContent=config.kind==='story'?`第 ${config.storyIndex+1} 章 · ${config.title}`:config.title;
   $("#startAssault").classList.toggle('show',game.preparing);$("#battleTip").textContent=game.preparing?'布阵阶段：敌军尚未出现，摆好后点击“开始来敌”':`战前增益：${config.buffData?.name||'无'} · ${config.protect?'特殊王棋绝不能被摧毁':'选择棋子，再点击空格部署'}`;
@@ -222,17 +236,17 @@ function startPreparedAssault(){
 }
 function spawnCustomArmy(entries){
   const laneDepth=[0,0,0,0,0];let total=0;game.wave=1;game.nextWave=999;
-  entries.forEach(entry=>{for(let i=0;i<entry.count;i++){const row=entry.row<0?i%BOARD_RULES.rows:entry.row,enemy=spawnEnemy(entry.type,row);enemy.x=9.2+laneDepth[row]*.72+(total%2)*.08;laneDepth[row]++;total++;}});game.waveTarget=total;game.spawned=total;return total;
+  entries.forEach(entry=>{for(let i=0;i<entry.count;i++){const row=entry.row<0?i%BOARD_RULES.rows:entry.row,enemy=spawnEnemy(entry.type,row);enemy.x=stagingXForEnemy(entry.type)+laneDepth[row]*.72+(total%2)*.08;laneDepth[row]++;total++;}});game.waveTarget=total;game.spawned=total;return total;
 }
 function spawnFunBatch(count){
   game.wave=1;game.waveTarget=count;game.spawned=count;game.nextWave=999;
-  for(let i=0;i<count;i++){const type=game.config.theme==='beanFun'?['shieldGiant','general','chariot','guard'][i%4]:(i%3===2?'general':'shieldGiant'),enemy=spawnEnemy(type,i%BOARD_RULES.rows);enemy.x=9.2+Math.floor(i/BOARD_RULES.rows)*.82+(i%2)*.16;}
+  for(let i=0;i<count;i++){const type=game.config.theme==='beanFun'?['shieldGiant','general','chariot','guard'][i%4]:(i%3===2?'general':'shieldGiant'),enemy=spawnEnemy(type,i%BOARD_RULES.rows);enemy.x=stagingXForEnemy(type)+Math.floor(i/BOARD_RULES.rows)*.82+(i%2)*.16;}
 }
 const SNAKE_PIT_ACTIVE_CAP=40;
 function spawnSnakePitBatch(limit=SNAKE_PIT_ACTIVE_CAP){
   const remaining=Math.max(0,game.waveTarget-game.spawned),room=Math.max(0,SNAKE_PIT_ACTIVE_CAP-game.enemies.length),count=Math.min(limit,remaining,room),laneDepth=[0,0,0,0,0];
   game.enemies.forEach(enemy=>laneDepth[enemy.row]++);
-  for(let i=0;i<count;i++){const row=(game.spawned+i)%BOARD_RULES.rows,enemy=spawnEnemy('snake',row);enemy.x=9.25+laneDepth[row]*.72+(i%2)*.08;laneDepth[row]++;game.spawned++;}
+  for(let i=0;i<count;i++){const row=(game.spawned+i)%BOARD_RULES.rows,enemy=spawnEnemy('snake',row);enemy.x=stagingXForEnemy('snake')+laneDepth[row]*.72+(i%2)*.08;laneDepth[row]++;game.spawned++;}
   return count;
 }
 function startSnakePit(count){
@@ -266,6 +280,7 @@ function updateTrayState(){
 
 function rankMult(type,rank=save.ranks[type]){ return 1+(rank-1)*.08; }
 function rollAttackDamage(unit){const min=unit.attackMin??unit.attack-15,max=unit.attackMax??unit.attack+15;return min+Math.random()*(max-min);}
+function fusionResultFor(baseType,sourceType){return FUSION_RECIPES[baseType]?.[sourceType]||null;}
 function createPlayer(type,row,col,protectedUnit=false,rank=game?.config?.customRanks?.[type]??save.ranks[type]){
   const u=UNITS[type], mult=rankMult(type,rank);
   return {id:++game.entityId,type,row,col,hp:Math.round(u.hp*mult),maxHp:Math.round(u.hp*mult),timer:u.attackMode==='support'?6:1, protectedUnit, rank,traitHits:0,attackCycles:0,supportCycles:0,kills:0,lastHitTimer:0,traitCooldown:0,storedShots:0,combo:0,charge:0,weatherTimer:4,prismMode:0,rainbowHits:{},revived:false};
@@ -277,7 +292,7 @@ function placeSelected(row,col){
   if(game.selected==='bean'){
     if((game.beans||0)<=0){game.selected=game.config.loadout?.[0]||'pawn';toast('没有可用的能量豆');renderUnitTray();updateGameHeader();return;}
     if(!occupant){toast('请点击一枚我方棋子发动爆发技');return;}
-    game.beans--;activateEnergyBean(occupant);game.selected=occupant.type;renderUnitTray();updateGameHeader();return;
+    game.beans--;activateEnergyBean(occupant);game.selected=game.config.loadout?.includes(occupant.type)?occupant.type:(game.config.loadout?.[0]||'pawn');renderUnitTray();updateGameHeader();return;
   }
   if(game.selected==='shovel'){
     if(!occupant){ toast(hazard?'敌方冰面或盾碑无法用铲子清除':'这里没有可以铲除的棋子'); return; }
@@ -286,6 +301,15 @@ function placeSelected(row,col){
     toast(`${UNITS[occupant.type].name}已被铲除`); renderEntities(); return;
   }
   const type=game.selected,u=UNITS[type];
+  const fusionType=occupant&&fusionResultFor(occupant.type,type);
+  if(fusionType){
+    if(game.energy<u.cost){toast("能量不足，无法完成融合");return;}
+    if(game.cooldowns[type]>0){toast(`${u.name}仍在整备中`);return;}
+    const result=UNITS[fusionType],hpRatio=occupant.hp/occupant.maxHp,sourceRank=game.config.customRanks?.[type]??save.ranks[type]??1;
+    game.energy-=u.cost;const frugalKing=game.players.find(p=>p.type==='king'&&p.rank>=2&&Math.hypot(p.col-col,p.row-row)<=1.55);if(frugalKing){const refund=Math.round(u.cost*.2);game.energy+=refund;floatText(col+.5,row+.1,`节俭 +${refund}`,'#ffe084');}if(game.config.infiniteEnergy)game.energy=999999;
+    occupant.type=fusionType;occupant.rank=Math.max(occupant.rank||1,sourceRank);occupant.maxHp=Math.round(result.hp*rankMult(fusionType,occupant.rank));occupant.hp=Math.max(1,Math.round(occupant.maxHp*hpRatio));occupant.timer=0;occupant.attackCycles=0;occupant.traitHits=0;occupant.prismMode=0;
+    game.cooldowns[type]=game.config.noCooldown?0:u.cd*(game.config.buffData?.cooldown||1);game.used[type]=(game.used[type]||0)+1;combatVisual('prismBurst',col+.5,row+.5);pulseAt(col+.5,row+.5,result.element);floatText(col+.5,row+.08,`${result.name}融合完成!`,result.color);toast(`${UNITS[result.fusionBase].name} + ${u.name} → ${result.name}`);updateGameHeader();renderUnitTray();renderEntities();return;
+  }
   if(occupant){ toast("这个棋位已经被占用"); return; }
   if(hazard){ toast(hazard.type==='ice'?'此格已结冰，无法部署':'盾碑占据了此格，必须先摧毁'); return; }
   if(game.energy<u.cost){ toast("能量不足"); return; }
@@ -307,9 +331,9 @@ function activateEnergyBean(p,options={}){
   p.ultGlowTimer=Math.max(p.ultGlowTimer||0,ultimateCycleSeconds(p));
   if(p.type==='pawn'){
     combatVisual('swordSlam',p.col+.5,p.row+.5);combatVisual('ultimateShockwave',p.col+.6,p.row+.5,p.col+spec.frontCells+1,p.row+.5);for(let col=p.col+1;col<=Math.min(BOARD_RULES.cols-1,p.col+spec.frontCells);col++)combatVisual('groundCrack',col+.5,p.row+.5);
-    [...game.enemies].filter(e=>enemyFullyVisible(e)&&e.row===p.row&&e.x>=p.col+1&&e.x<p.col+1+spec.frontCells).forEach(e=>damageStatusEnemy(e,spec.damage,p.type,'crack'));
+    [...game.enemies].filter(e=>enemyDamageable(e)&&e.row===p.row&&e.x>=p.col+1&&e.x<p.col+1+spec.frontCells).forEach(e=>damageStatusEnemy(e,spec.damage,p.type,'crack'));
   }else if(p.type==='berserkerPawn'){
-    const targets=[...game.enemies].filter(e=>enemyFullyVisible(e)&&Math.hypot(e.x-p.col,e.row-p.row)<=spec.radius);targets.forEach(e=>damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'slash'));healPlayer(p,spec.healPerHit*targets.length);combatVisual('royalSweep',p.col+.5,p.row+.5);combatVisual('fireVortex',p.col+.5,p.row+.5);
+    const targets=[...game.enemies].filter(e=>enemyDamageable(e)&&Math.hypot(e.x-p.col,e.row-p.row)<=spec.radius);targets.forEach(e=>damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'slash'));healPlayer(p,spec.healPerHit*targets.length);combatVisual('royalSweep',p.col+.5,p.row+.5);combatVisual('fireVortex',p.col+.5,p.row+.5);
   }else if(p.type==='shieldPawn'){
     p.beanArmor=Math.round(spec.armor*mult);p.hp=p.maxHp;combatVisual('fortress',p.col+.5,p.row+.5);combatVisual('shieldRunes',p.col+.5,p.row+.5);floatText(p.col+.5,p.row+.2,`+护甲 ${p.beanArmor}`,'#d6e5dc');
   }else if(p.type==='spearPawn'){
@@ -318,20 +342,20 @@ function activateEnergyBean(p,options={}){
     queueRapidAbility(p,spec.shots,spec.interval,spec.projectile);
   }else if(p.type==='twinRook'){
     queueRapidAbility(p,spec.shots,spec.interval,spec.projectile);
-  }else if(p.type==='superRook'){
+  }else if(isSuperRookType(p.type)){
     combatVisual('royalSweep',p.col+.5,p.row+.5);queueFanAbility(p,spec);
   }else if(p.type==='iceRook'){
     combatVisual('iceWave',p.col+.55,p.row+.5,9.25,p.row+.5);
     for(let col=p.col+1;col<BOARD_RULES.cols;col++){addIceHazard(p.row,col);combatVisual('iceRise',col+.5,p.row+.5);}
-    [...game.enemies].filter(e=>enemyFullyVisible(e)&&e.row===p.row).forEach(e=>damageStatusEnemy(e,spec.freezeDamage,p.type,'freeze'));
+    [...game.enemies].filter(e=>enemyDamageable(e)&&e.row===p.row).forEach(e=>damageStatusEnemy(e,spec.freezeDamage,p.type,'freeze'));
     queueRapidAbility(p,spec.shots,spec.interval,spec.projectile);
   }else if(p.type==='flameRook'){
     combatVisual('fireVortex',p.col+.5,p.row+.5);queueRapidAbility(p,spec.shots,spec.interval,spec.projectile);
   }else if(p.type==='poisonRook'){
     fireProjectile(p.col+.5,p.row+.62,9.6,p.row+.62,spec.projectile,1.55);combatVisual('toxicLaunch',p.col+.5,p.row+.5);combatVisual('toxicWave',p.col+.5,p.row+.62,9.4,p.row+.62);
-    [...game.enemies].filter(e=>enemyFullyVisible(e)&&e.row===p.row&&e.x>p.col).forEach(e=>damageStatusEnemy(e,spec.damage,p.type,'poison'));
+    [...game.enemies].filter(e=>enemyDamageable(e)&&e.row===p.row&&e.x>p.col).forEach(e=>damageStatusEnemy(e,spec.damage,p.type,'poison'));
   }else if(p.type==='bombardRook'){
-    const targets=[...game.enemies].filter(enemyFullyVisible).sort((a,b)=>b.hp-a.hp).slice(0,spec.maxTargets);targets.forEach(target=>{damageStatusEnemy(target,Math.round(spec.damage*mult),p.type,'bombard');game.enemies.filter(e=>e!==target&&Math.hypot(e.x-target.x,e.row-target.row)<=1.5).slice(0,3).forEach(e=>damageStatusEnemy(e,Math.round(spec.damage*spec.splash*mult),p.type,'bombard'));combatVisual('fireVortex',target.x+.5,target.row+.5);});combatVisual('stormCloud',4.5,2.5);
+    const targets=[...game.enemies].filter(enemyDamageable).sort((a,b)=>b.hp-a.hp).slice(0,spec.maxTargets);targets.forEach(target=>{damageStatusEnemy(target,Math.round(spec.damage*mult),p.type,'bombard');game.enemies.filter(e=>e!==target&&Math.hypot(e.x-target.x,e.row-target.row)<=1.5).slice(0,3).forEach(e=>damageStatusEnemy(e,Math.round(spec.damage*spec.splash*mult),p.type,'bombard'));combatVisual('fireVortex',target.x+.5,target.row+.5);});combatVisual('stormCloud',4.5,2.5);
   }else if(p.type==='king'){
     const gain=Math.round(spec.energy*mult);game.energy+=gain;game.energyCollected+=gain;p.hp=p.maxHp;floatText(p.col+.5,p.row+.25,`+${gain}`,'#ffe977');combatVisual('royalBloom',p.col+.5,p.row+.5);combatVisual('royalPillars',p.col+.5,p.row+.5);
   }else if(p.type==='royalKing'){
@@ -341,35 +365,37 @@ function activateEnergyBean(p,options={}){
   }else if(p.type==='warKing'){
     const gain=Math.round(spec.energy*mult);game.energy+=gain;game.energyCollected+=gain;game.players.forEach(ally=>{ally.beanArmor=(ally.beanArmor||0)+Math.round(spec.armorAll*mult);ally.timer=0;});floatText(p.col+.5,p.row+.25,`总攻 +${gain}`,'#ffd07a');combatVisual('royalSweep',p.col+.5,p.row+.5);combatVisual('royalPillars',p.col+.5,p.row+.5);
   }else if(p.type==='knight'){
-    combatVisual('knightCharge',p.col+.5,p.row+.5,9.4,p.row+.5);[...game.enemies].filter(e=>enemyFullyVisible(e)&&e.row===p.row&&e.x>p.col).slice(0,spec.maxTargets).forEach(e=>damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'charge'));
+    combatVisual('knightCharge',p.col+.5,p.row+.5,9.4,p.row+.5);[...game.enemies].filter(e=>enemyDamageable(e)&&e.row===p.row&&e.x>p.col).slice(0,spec.maxTargets).forEach(e=>damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'charge'));
   }else if(p.type==='stormKnight'){
-    game.enemies.filter(enemyFullyVisible).forEach((e,i)=>{game.abilityEvents.push({t:i*.035,kind:'lightning',sourceType:p.type,row:p.row,col:p.col,rank:p.rank,targetId:e.id,damage:Math.round(spec.damage*mult)});});combatVisual('stormCloud',4.5,2.5);
+    game.enemies.filter(enemyDamageable).forEach((e,i)=>{game.abilityEvents.push({t:i*.035,kind:'lightning',sourceType:p.type,row:p.row,col:p.col,rank:p.rank,targetId:e.id,damage:Math.round(spec.damage*mult)});});combatVisual('stormCloud',4.5,2.5);
   }else if(p.type==='frostKnight'){
-    game.enemies.filter(enemyFullyVisible).forEach(e=>{damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'freeze');if(game.enemies.includes(e)){e.frozenTimer=spec.freezeSeconds;e.slowTimer=spec.freezeSeconds;}});combatVisual('iceWave',.5,2.5,9.3,2.5);combatVisual('stormCloud',4.5,2.5);
+    game.enemies.filter(enemyDamageable).forEach(e=>{damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'freeze');if(game.enemies.includes(e)){e.frozenTimer=spec.freezeSeconds;e.slowTimer=spec.freezeSeconds;}});combatVisual('iceWave',.5,2.5,9.3,2.5);combatVisual('stormCloud',4.5,2.5);
   }else if(p.type==='guardianKnight'){
-    game.enemies.filter(enemyFullyVisible).forEach(e=>{damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'charge');if(game.enemies.includes(e))e.frozenTimer=Math.max(e.frozenTimer||0,spec.freezeSeconds);});combatVisual('knightCharge',p.col+.5,p.row+.5,9.4,p.row+.5);combatVisual('shieldRunes',p.col+.5,p.row+.5);
+    game.enemies.filter(enemyDamageable).forEach(e=>{damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'charge');if(game.enemies.includes(e))e.frozenTimer=Math.max(e.frozenTimer||0,spec.freezeSeconds);});combatVisual('knightCharge',p.col+.5,p.row+.5,9.4,p.row+.5);combatVisual('shieldRunes',p.col+.5,p.row+.5);
   }else if(['bishop','twinBishop','iceBishop','flameBishop'].includes(p.type)){
-    const damage=Math.round(spec.damage*mult);[...game.enemies].filter(e=>enemyFullyVisible(e)&&Math.abs(Math.abs(e.x-p.col)-Math.abs(e.row-p.row))<1.25).forEach(e=>{damageStatusEnemy(e,damage,p.type,p.type==='iceBishop'?'freeze':p.type==='flameBishop'?'burn':'arc');if(game.enemies.includes(e)&&p.type==='iceBishop'){e.frozenTimer=spec.freezeSeconds;e.slowTimer=spec.freezeSeconds;}if(game.enemies.includes(e)&&p.type==='flameBishop'){e.burnTimer=spec.burnSeconds;e.burnDps=spec.burnDps;e.burnSource=p.type;}combatVisual('arcBurst',e.x+.5,e.row+.5);});if(p.type==='flameBishop')game.hazards=game.hazards.filter(h=>h.type!=='ice');combatVisual('diagonalCross',p.col+.5,p.row+.5);combatVisual('arcMandala',p.col+.5,p.row+.5);
+    const damage=Math.round(spec.damage*mult);[...game.enemies].filter(e=>enemyDamageable(e)&&Math.abs(Math.abs(e.x-p.col)-Math.abs(e.row-p.row))<1.25).forEach(e=>{damageStatusEnemy(e,damage,p.type,p.type==='iceBishop'?'freeze':p.type==='flameBishop'?'burn':'arc');if(game.enemies.includes(e)&&p.type==='iceBishop'){e.frozenTimer=spec.freezeSeconds;e.slowTimer=spec.freezeSeconds;}if(game.enemies.includes(e)&&p.type==='flameBishop'){e.burnTimer=spec.burnSeconds;e.burnDps=spec.burnDps;e.burnSource=p.type;}combatVisual('arcBurst',e.x+.5,e.row+.5);});if(p.type==='flameBishop')game.hazards=game.hazards.filter(h=>h.type!=='ice');combatVisual('diagonalCross',p.col+.5,p.row+.5);combatVisual('arcMandala',p.col+.5,p.row+.5);
   }else if(p.type==='poisonBishop'){
-    game.enemies.filter(enemyFullyVisible).forEach(e=>{damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'poison');if(game.enemies.includes(e)){e.poisonTimer=spec.poisonSeconds;e.poisonDps=spec.poisonDps;e.poisonSource=p.type;e.noRegenTimer=spec.poisonSeconds;}});combatVisual('toxicWave',p.col+.5,p.row+.5,9.3,p.row+.5);combatVisual('arcMandala',p.col+.5,p.row+.5);
+    game.enemies.filter(enemyDamageable).forEach(e=>{damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'poison');if(game.enemies.includes(e)){e.poisonTimer=spec.poisonSeconds;e.poisonDps=spec.poisonDps;e.poisonSource=p.type;e.noRegenTimer=spec.poisonSeconds;}});combatVisual('toxicWave',p.col+.5,p.row+.5,9.3,p.row+.5);combatVisual('arcMandala',p.col+.5,p.row+.5);
   }else if(p.type==='lightBishop'){
-    game.players.forEach(ally=>{healPlayer(ally,Math.round(spec.healAll*mult));ally.beanArmor=(ally.beanArmor||0)+Math.round(spec.armorAll*mult);});game.enemies.filter(enemyFullyVisible).forEach(e=>damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'radiance'));combatVisual('royalPillars',p.col+.5,p.row+.5);combatVisual('arcMandala',p.col+.5,p.row+.5);
+    game.players.forEach(ally=>{healPlayer(ally,Math.round(spec.healAll*mult));ally.beanArmor=(ally.beanArmor||0)+Math.round(spec.armorAll*mult);});game.enemies.filter(enemyDamageable).forEach(e=>damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'radiance'));combatVisual('royalPillars',p.col+.5,p.row+.5);combatVisual('arcMandala',p.col+.5,p.row+.5);
   }else if(p.type==='queen'){
     combatVisual('royalSweep',p.col+.5,p.row+.5);queueMultiLaneAbility(p,spec,'queenRapid');
   }else if(p.type==='twinQueen'){
     combatVisual('royalSweep',p.col+.5,p.row+.5);queueMultiLaneAbility(p,spec,'queenRapid');combatVisual('doubleMuzzle',p.col+.7,p.row+.5);
+  }else if(['iceQueen','flameQueen','poisonQueen'].includes(p.type)){
+    const rows=adjacentRows(p.row);if(p.type==='iceQueen'){rows.forEach(row=>combatVisual('iceWave',p.col+.55,row+.5,9.25,row+.5));game.enemies.filter(e=>enemyDamageable(e)&&rows.includes(e.row)).forEach(e=>damageStatusEnemy(e,spec.freezeDamage,p.type,'freeze'));}if(p.type==='flameQueen')game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&rows.includes(h.row)&&h.col>p.col));queueMultiLaneAbility(p,spec,'queenRapid');combatVisual(p.type==='iceQueen'?'iceWave':p.type==='flameQueen'?'fireVortex':'toxicWave',p.col+.5,p.row+.5);
   }else if(p.type==='prismQueen'){
     combatVisual('prismBurst',p.col+.5,p.row+.5);queueMultiLaneAbility(p,spec,'prismRapid');
   }else if(p.type==='shadowQueen'){
-    game.enemies.filter(enemyFullyVisible).forEach(e=>{const marks=e.shadowMarks||0;damageStatusEnemy(e,Math.round(spec.damage*mult*(1+marks*.35)),p.type,'shadow');if(game.enemies.includes(e))e.shadowMarks=marks?0:1;});combatVisual('prismBurst',p.col+.5,p.row+.5);combatVisual('royalSweep',p.col+.5,p.row+.5);
-  }else if(p.type==='superQueen'){
+    game.enemies.filter(enemyDamageable).forEach(e=>{const marks=e.shadowMarks||0;damageStatusEnemy(e,Math.round(spec.damage*mult*(1+marks*.35)),p.type,'shadow');if(game.enemies.includes(e))e.shadowMarks=marks?0:1;});combatVisual('prismBurst',p.col+.5,p.row+.5);combatVisual('royalSweep',p.col+.5,p.row+.5);
+  }else if(isSuperQueenType(p.type)){
     combatVisual('royalSweep',p.col+.5,p.row+.5);combatVisual('prismBurst',p.col+.5,p.row+.5);queueFanAbility(p,spec);
   }
-  p.timer=['rook','twinRook','iceRook','flameRook','spearPawn','twinQueen','superRook','superQueen'].includes(p.type)?1.6:p.type==='poisonRook'?1.55:.7;if(!preview&&!options.auto){save.mastery[p.type]=(save.mastery[p.type]||0)+2;checkRanks(p.type);$("#battleTip").textContent=`${u.name}已发动能量豆爆发`;}
+  p.timer=['rapid','tripleRapid','fan'].includes(spec.kind)?1.6:spec.kind==='roller'?1.55:.7;if(!preview&&!options.auto){save.mastery[p.type]=(save.mastery[p.type]||0)+2;checkRanks(p.type);$("#battleTip").textContent=`${u.name}已发动能量豆爆发`;}
 }
 
 function ultimateCycleSeconds(p){
-  const spec=ABILITY_SPECS[p.type];if(!spec?.shots)return 1.5;if(spec.kind==='fan')return Math.max(1.5,(spec.perLane||spec.shots)*spec.interval);const paired=p.type==='twinRook'||p.type==='twinQueen',rounds=paired?spec.shots/2:spec.shots;return Math.max(1.5,rounds*spec.interval);
+  const spec=ABILITY_SPECS[p.type];if(!spec?.shots)return 1.5;if(spec.kind==='fan')return spec.duration||1.5;const paired=p.type==='twinRook'||p.type==='twinQueen',rounds=paired?spec.shots/2:spec.shots;return Math.max(1.5,rounds*spec.interval);
 }
 function updateInfiniteUltimates(dt){
   if(!game.config.snakePit||game.preparing)return;
@@ -379,8 +405,8 @@ function updateInfiniteUltimates(dt){
 function queueRapidAbility(p,count,interval,kind){game.abilityEvents=game.abilityEvents||[];const paired=p.type==='twinRook';for(let i=0;i<count;i++)game.abilityEvents.push({t:paired?Math.floor(i/2)*interval*2:i*interval,kind:'rapid',variant:kind,sourceType:p.type,sourceId:p.id,row:p.row,col:p.col,rank:p.rank,barrel:paired?i%2:null});const charge=combatVisual('rapidCharge',p.col+.5,p.row+.5);charge.classList.add(`visual-charge-${p.type}`);}
 function queueMultiLaneAbility(p,spec,kind){game.abilityEvents=game.abilityEvents||[];const paired=p.type==='twinQueen';for(let i=0;i<spec.shots;i++)game.abilityEvents.push({t:paired?Math.floor(i/2)*spec.interval*2:i*spec.interval,kind,sourceType:p.type,sourceId:p.id,row:p.row,col:p.col,rank:p.rank,barrel:paired?i%2:null});const charge=combatVisual('rapidCharge',p.col+.5,p.row+.5);charge.classList.add(`visual-charge-${p.type}`);}
 function queueFanAbility(p,spec){
-  game.abilityEvents=game.abilityEvents||[];const rows=spec.lanes===3?adjacentRows(p.row):[p.row],count=spec.perLane||spec.shots;
-  rows.forEach((row,lane)=>{for(let i=0;i<count;i++){const progress=count===1?.5:i/(count-1);game.abilityEvents.push({t:i*spec.interval,kind:'fanRapid',sourceType:p.type,sourceId:p.id,row,col:p.col,rank:p.rank,angle:(progress-.5)*spec.fanDegrees,lane,shot:i});}});
+  game.abilityEvents=game.abilityEvents||[];const rows=spec.lanes===3?adjacentRows(p.row):[p.row],rings=spec.rings||5,shotsPerRing=spec.shotsPerRing||Math.ceil((spec.perLane||spec.shots)/rings);
+  rows.forEach((row,lane)=>{for(let ring=0;ring<rings;ring++){for(let slot=0;slot<shotsPerRing;slot++){const progress=shotsPerRing===1?.5:slot/(shotsPerRing-1),flightScale=.88+((slot*5+ring*3)%9)*.03;game.abilityEvents.push({t:ring*(spec.ringInterval||spec.duration/rings),kind:'fanRapid',sourceType:p.type,sourceId:p.id,row,col:p.col,rank:p.rank,angle:(progress-.5)*spec.fanDegrees,flightScale,lane,ring,slot,shot:ring*shotsPerRing+slot});}}});
   const charge=combatVisual('rapidCharge',p.col+.5,p.row+.5);charge.classList.add(`visual-charge-${p.type}`);
 }
 function firePairedProjectiles(x,y,firstTarget,secondTarget,kind='twinRook'){
@@ -416,23 +442,23 @@ function executeAbilityEvent(event){
   }
   if(event.kind==='fanRapid'){
     const spec=ABILITY_SPECS[event.sourceType],mult=rankMult(event.sourceType,event.rank),attacker=game.players.find(p=>p.id===event.sourceId)||null,angle=event.angle*Math.PI/180,ox=event.col+.58,oy=event.row+.5,tx=9.65,ty=oy+Math.tan(angle)*(tx-ox);
-    const target=[...game.enemies.filter(enemyFullyVisible),...game.hazards.filter(h=>h.type==='shield')].filter(candidate=>{const cx=targetX(candidate)+.5;if(cx<=ox)return false;const rayY=oy+Math.tan(angle)*(cx-ox);return Math.abs(candidate.row+.5-rayY)<=.48;}).sort((a,b)=>targetX(a)-targetX(b))[0];
-    fireProjectile(ox,oy,tx,ty,spec.projectile,.72);if(event.shot%8===0)combatVisual('muzzle',ox+.12,oy);if(target){const amount=spec.damageMin+Math.random()*(spec.damageMax-spec.damageMin);damageTarget(target,Math.round(amount*mult),event.sourceType,attacker);}return;
+    const target=[...game.enemies.filter(enemyDamageable),...game.hazards.filter(h=>h.type==='shield')].filter(candidate=>{const cx=targetX(candidate)+.5;if(cx<=ox)return false;const rayY=oy+Math.tan(angle)*(cx-ox);return Math.abs(candidate.row+.5-rayY)<=.48;}).sort((a,b)=>targetX(a)-targetX(b))[0];
+    fireProjectile(ox,oy,tx,ty,spec.projectile,(spec.flightSeconds||1.5)*(event.flightScale||1));if(event.slot===0)combatVisual(spec.element==='ice'?'iceMuzzle':spec.element==='flame'?'fireMuzzle':spec.element==='poison'?'toxicMuzzle':'muzzle',ox+.12,oy);if(target){const amount=spec.damageMin+Math.random()*(spec.damageMax-spec.damageMin);damageTarget(target,Math.round(amount*mult),event.sourceType,attacker);if(attacker)applyElementalHit(target,attacker,mult);}return;
   }
   if(event.kind==='queenRapid'||event.kind==='prismRapid'){
     const spec=ABILITY_SPECS[event.sourceType],mult=rankMult(event.sourceType,event.rank),attacker=game.players.find(p=>p.id===event.sourceId)||null;
     adjacentRows(event.row).forEach(row=>{
       if(event.kind==='queenRapid'){
-        const target=nearestLaneTarget(row,event.col,9),tx=target?targetX(target)+.5:9.5,shotY=row+.5+(event.barrel==null?0:event.barrel?.09:-.09);fireProjectile(event.col+.6,shotY,tx,shotY,'rook');combatVisual('muzzle',event.col+.75,shotY);if(target){const amount=spec.damageMin?spec.damageMin+Math.random()*(spec.damageMax-spec.damageMin):spec.damage;damageTarget(target,Math.round(amount*mult),event.sourceType,attacker);}
+        const target=nearestLaneTarget(row,event.col,9),tx=target?targetX(target)+.5:9.5,shotY=row+.5+(event.barrel==null?0:event.barrel?.09:-.09),projectile=spec.projectile||'rook';fireProjectile(event.col+.6,shotY,tx,shotY,projectile);combatVisual(spec.element==='ice'?'iceMuzzle':spec.element==='flame'?'fireMuzzle':spec.element==='poison'?'toxicMuzzle':'muzzle',event.col+.75,shotY);if(target){const amount=spec.damageMin?spec.damageMin+Math.random()*(spec.damageMax-spec.damageMin):spec.damage;damageTarget(target,Math.round(amount*mult),event.sourceType,attacker);if(attacker)applyElementalHit(target,attacker,mult);}
       }else{
-        combatVisual('prismLane',event.col+.5,row+.5,9.3,row+.5);game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===row&&e.x>event.col).forEach(e=>damageEnemy(e,Math.round(spec.damage*mult),event.sourceType,attacker));
+        combatVisual('prismLane',event.col+.5,row+.5,9.3,row+.5);game.enemies.filter(e=>enemyDamageable(e)&&e.row===row&&e.x>event.col).forEach(e=>damageEnemy(e,Math.round(spec.damage*mult),event.sourceType,attacker));
       }
     });return;
   }
   if(event.kind!=='rapid')return;
   const mult=rankMult(event.sourceType,event.rank),variant=event.variant;
   if(variant==='spearVolley'){
-    const spec=ABILITY_SPECS[event.sourceType],target=game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===event.row&&e.x>event.col).sort((a,b)=>a.x-b.x)[0],tx=target?target.x+.5:9.5;fireProjectile(event.col+.62,event.row+.25,tx,event.row+.5,'spearVolley');combatVisual('spearRelease',event.col+.62,event.row+.3);if(target)damageEnemy(target,Math.round(spec.damage*mult),event.sourceType,game.players.find(p=>p.id===event.sourceId)||null);return;
+    const spec=ABILITY_SPECS[event.sourceType],target=game.enemies.filter(e=>enemyDamageable(e)&&e.row===event.row&&e.x>event.col).sort((a,b)=>a.x-b.x)[0],tx=target?target.x+.5:9.5;fireProjectile(event.col+.62,event.row+.25,tx,event.row+.5,'spearVolley');combatVisual('spearRelease',event.col+.62,event.row+.3);if(target)damageEnemy(target,Math.round(spec.damage*mult),event.sourceType,game.players.find(p=>p.id===event.sourceId)||null);return;
   }
   const target=nearestLaneTarget(event.row,event.col,9),tx=target?targetX(target)+.5:9.5,ty=event.row+.5+(event.barrel==null?0:event.barrel?.09:-.09);
   fireProjectile(event.col+.6,ty,tx,ty,variant);combatVisual(variant==='iceRook'?'iceMuzzle':variant==='flameRook'?'fireMuzzle':'muzzle',event.col+.75,ty);
@@ -516,7 +542,7 @@ function spawnEnemy(type,row,hpScale=1){
   const e=ENEMIES[type];
   const scaling=game.config.id==='rush'?.64:1+(Math.max(0,game.wave-1)*.045);
   const difficulty=game.config.difficultyData||DIFFICULTIES.standard,hp=Math.round(e.hp*scaling*hpScale*difficulty.hp);
-  const enemy={id:++game.entityId,type,row,x:9.35,hp,maxHp:hp,attackTimer:e.rate,jumped:false,summonTimer:e.summoner?10:7,teleportTimer:5,noHitTime:0,regenTick:0,slowTimer:0,burnTimer:0,burnDps:0,poisonTimer:0,poisonDps:0,vulnerableTimer:0,statusTick:0,reflectTimer:3.5,reflectActive:0,lastTrailCol:null};
+  const enemy={id:++game.entityId,type,row,x:stagingXForEnemy(type),hp,maxHp:hp,attackTimer:e.rate,jumped:false,summonTimer:e.summoner?10:7,teleportTimer:5,noHitTime:0,regenTick:0,slowTimer:0,burnTimer:0,burnDps:0,poisonTimer:0,poisonDps:0,vulnerableTimer:0,statusTick:0,reflectTimer:3.5,reflectActive:0,lastTrailCol:null};
   game.enemies.push(enemy); return enemy;
 }
 
@@ -526,7 +552,7 @@ function updatePlayers(dt){
     p.weaponHidden=Math.max(0,(p.weaponHidden||0)-dt);p.ultGlowTimer=Math.max(0,(p.ultGlowTimer||0)-dt);p.lastHitTimer=(p.lastHitTimer||0)+dt;p.traitCooldown=Math.max(0,(p.traitCooldown||0)-dt);p.rageTimer=Math.max(0,(p.rageTimer||0)-dt);
     if(p.type==='shieldPawn'&&p.rank>=2&&p.lastHitTimer>=2&&p.hp<p.maxHp){p.regenTick=(p.regenTick||0)+dt;if(p.regenTick>=1){p.regenTick-=1;healPlayer(p,45);}}
     if(p.type==='king'&&p.rank>=3&&game.energy<50&&p.traitCooldown<=0){game.energy+=35;game.energyCollected+=35;p.traitCooldown=15;floatText(p.col+.5,p.row+.15,'应急金库 +35','#ffe071');combatVisual('royalBloom',p.col+.5,p.row+.5);}
-    if(p.type==='stormKnight'&&p.rank>=5&&game.enemies.length>=5){p.weatherTimer=(p.weatherTimer||4)-dt;if(p.weatherTimer<=0){p.weatherTimer=4;game.enemies.slice().sort(()=>Math.random()-.5).slice(0,3).forEach(e=>{damageStatusEnemy(e,90,p.type,'storm');combatVisual('lightningStrike',e.x+.5,e.row+.5);});}}
+    if(p.type==='stormKnight'&&p.rank>=5&&game.enemies.filter(enemyTargetable).length>=5){p.weatherTimer=(p.weatherTimer||4)-dt;if(p.weatherTimer<=0){p.weatherTimer=4;game.enemies.filter(enemyTargetable).sort(()=>Math.random()-.5).slice(0,3).forEach(e=>{damageStatusEnemy(e,90,p.type,'storm');combatVisual('lightningStrike',e.x+.5,e.row+.5);});}}
     p.timer-=dt;
     if(p.timer>0) continue;
     const u=UNITS[p.type], mult=rankMult(p.type,p.rank),warAura=game.players.some(ally=>ally.type==='warKing'&&ally.rank>=2&&ally!==p&&Math.hypot(ally.col-p.col,ally.row-p.row)<=1.55),attackSpeed=(game.config.buffData?.attackSpeed||1)*(warAura?1.15:1);
@@ -568,7 +594,9 @@ function updatePlayers(dt){
     } else if(p.type==='queen'){
       p.attackCycles=(p.attackCycles||0)+1;const rows=p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row),targets=rows.map(r=>nearestLaneTarget(r,p.col,9)).filter(Boolean);
       if(targets.length){targets.forEach(e=>{const amount=Math.round(rollAttackDamage(u)*mult);damageTarget(e,amount,p.type,p);fireProjectile(p.col+.55,e.row+.5,targetX(e)+.5,e.row+.5,'rook');combatVisual('muzzle',p.col+.72,e.row+.5)});if(p.rank>=4&&rows.length===5)game.players.filter(a=>a!==p&&UNITS[a.type].shape==='rook').forEach(a=>a.timer=Math.max(0,a.timer-.35));p.timer=Math.max(.75,1.2-(p.rank-1)*.06)/attackSpeed;} else p.timer=.2;
-    } else if(p.type==='superQueen'){
+    } else if(['iceQueen','flameQueen','poisonQueen'].includes(p.type)){
+      fireElementalQueenVolley(p,u,mult,attackSpeed);
+    } else if(isSuperQueenType(p.type)){
       p.attackCycles=(p.attackCycles||0)+1;const rows=p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row);let fired=0;rows.forEach(row=>fired+=fireQuadVolley(p,row,mult));if(fired){if(p.rank>=4&&rows.length===5)game.players.filter(a=>a!==p&&UNITS[a.type].shape==='rook').forEach(a=>a.timer=Math.max(0,a.timer-.5));if(p.rank>=5){game.abilityEvents=game.abilityEvents||[];rows.forEach(row=>game.abilityEvents.push({t:.3,kind:'quadRepeat',sourceId:p.id,row}));}p.timer=1.5/attackSpeed;}else p.timer=.2;
     } else if(p.type==='shadowQueen'){
       p.attackCycles=(p.attackCycles||0)+1;const rows=p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row),target=game.enemies.filter(e=>enemyFullyVisible(e)&&rows.includes(e.row)&&e.x>p.col).sort((a,b)=>a.hp-b.hp)[0];if(target){const third=(target.shadowMarks||0)>=2;damageEnemy(target,Math.round(u.attack*mult),p.type,p);if(game.enemies.includes(target)){target.shadowMarks=(target.shadowMarks||0)+1;if(p.rank>=2)target.vulnerableTimer=Math.max(target.vulnerableTimer||0,2);if(third){target.shadowMarks=0;damageStatusEnemy(target,Math.round(260*mult),p.type,'shadow');if(p.rank>=4){const next=game.enemies.filter(e=>e!==target&&Math.hypot(e.x-target.x,e.row-target.row)<=2).sort((a,b)=>a.hp-b.hp)[0];if(next)next.shadowMarks=(next.shadowMarks||0)+1;}if(p.rank>=5&&game.enemies.includes(target)&&target.hp/target.maxHp<.2)damageStatusEnemy(target,350,p.type,'shadow');}}fireProjectile(p.col+.55,p.row+.5,target.x+.5,target.row+.5,'shadowQueen',.3);combatVisual('prismLane',p.col+.5,p.row+.5,target.x+.5,target.row+.5);p.timer=1.25/attackSpeed;}else p.timer=.2;
@@ -576,7 +604,7 @@ function updatePlayers(dt){
       p.attackCycles=(p.attackCycles||0)+1;let rows=adjacentRows(p.row);if(p.rank>=3&&p.attackCycles%4===0)rows=[0,1,2,3,4];let fired=0;const lone=p.rank>=5&&new Set(game.players.filter(a=>UNITS[a.type].attack>0).map(a=>a.type)).size===1;rows.forEach(row=>{const targets=visibleFlatTargets(row,p.col,9),copies=lone?2:1;for(let copy=0;copy<copies;copy++){const first=targets[copy*2]||targets[0],second=p.rank>=2?(targets[copy*2+1]||first):first;if(!first)continue;const amount=Math.round(u.attack*mult);damageTarget(first,amount,p.type,p);if(second&&(second.isHazard?game.hazards.includes(second):game.enemies.includes(second)))damageTarget(second,amount,p.type,p);firePairedProjectiles(p.col+.5-copy*.5,row+.5,first,second);fired+=2;}});if(fired){combatVisual('doubleMuzzle',p.col+.72,p.row+.5);p.timer=Math.max(.78,1.3-(p.rank-1)*.06)/attackSpeed;}else p.timer=.2;
     } else if(p.type==='twinRook'){
       let targets=visibleFlatTargets(p.row,p.col,7);if(!targets.length&&p.rank>=4){const supportRows=[p.row-1,p.row+1].filter(row=>row>=0&&row<5).sort((a,b)=>game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===b).length-game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===a).length);targets=visibleFlatTargets(supportRows[0],p.col,7);}const target=targets[0];if(target){const second=p.rank>=2?(targets[1]||target):target,amount=Math.round(u.attack*mult);damageTarget(target,amount,p.type,p);if(second&&(second.isHazard?game.hazards.includes(second):game.enemies.includes(second)))damageTarget(second,amount,p.type,p);p.combo=(p.lastTargetId===target.id?(p.combo||0)+2:2);p.lastTargetId=target.id;firePairedProjectiles(p.col+.5,p.row+.5,target,second);combatVisual('doubleMuzzle',p.col+.7,p.row+.5);const frenzy=p.rank>=5&&p.combo>=10;p.timer=Math.max(.42,(1.25-(p.rank-1)*.06)*(frenzy?.5:1))/attackSpeed;if(frenzy)floatText(p.col+.5,p.row+.08,'极速鼓点','#ffe07c');}else p.timer=.2;
-    } else if(p.type==='superRook'){
+    } else if(isSuperRookType(p.type)){
       p.attackCycles=(p.attackCycles||0)+1;const fired=fireQuadVolley(p,p.row,mult);if(fired){game.abilityEvents=game.abilityEvents||[];if(p.rank>=3&&p.attackCycles%2===0)game.abilityEvents.push({t:.15,kind:'quadRepeat',sourceId:p.id,row:p.row});if(p.rank>=5)game.abilityEvents.push({t:.3,kind:'quadRepeat',sourceId:p.id,row:p.row});p.timer=1.5/attackSpeed;}else p.timer=.2;
     } else if(p.type==='iceRook'){
       const target=nearestLaneTarget(p.row,p.col,7);if(target){const hit=damageTarget(target,Math.round(u.attack*mult),p.type,p);if(hit&&!target.isHazard){target.slowTimer=Math.max(target.slowTimer,3.5+(p.rank-1)*.3);if(p.rank>=3){target.iceHits=(target.iceHits||0)+1;if(target.iceHits%3===0){target.frozenTimer=1.5;recordUnlockProgress('iceSculptures');floatText(target.x+.5,target.row+.1,'冰雕','#b8f4ff');}}if(p.rank>=4&&target.frozenTimer>0)target.x=Math.min(9.2,target.x+.6);}if(p.rank>=2){const ice=game.hazards.filter(h=>h.type==='ice'&&h.row===p.row&&h.col>p.col).sort((a,b)=>a.col-b.col)[0];if(ice){game.hazards=game.hazards.filter(h=>h!==ice);floatText(ice.col+.5,ice.row+.1,'冰面净化','#c8f7ff');}}fireProjectile(p.col+.5,p.row+.5,targetX(target)+.5,target.row+.5,'iceRook',.27);combatVisual('iceMuzzle',p.col+.72,p.row+.5);if(hit)pulseAt(targetX(target)+.5,target.row+.5,'freeze');p.timer=Math.max(.8,1.25-(p.rank-1)*.06)/attackSpeed;}else p.timer=.2;
@@ -596,9 +624,17 @@ function updatePlayers(dt){
     }
   }
 }
-function enemyFullyVisible(e){
-  if(!Number.isFinite(e?.x))return true;const data=ENEMIES[e.type]||{},halfWidth=data.giant?.7:data.boss?.59:data.large?.525:.39;return e.x+.5+halfWidth<=BOARD_RULES.cols+.001;
+function enemyHalfWidth(e){const data=ENEMIES[e?.type]||{};return data.giant?.7:data.boss?.59:data.large?.525:.39;}
+function stagingXForEnemy(type){return BOARD_RULES.cols-.5+enemyHalfWidth({type})+.02;}
+function enemyDamageable(e){
+  if(!Number.isFinite(e?.x))return true;const center=e.x+.5,halfWidth=enemyHalfWidth(e);return center-halfWidth<BOARD_RULES.cols+BOARD_RULES.prep&&center+halfWidth>-BOARD_RULES.prep;
 }
+function enemyTargetable(e){
+  if(!Number.isFinite(e?.x))return true;return e.x+.5-enemyHalfWidth(e)<BOARD_RULES.cols;
+}
+// 保留旧函数名供既有选敌机制调用；现在它表达的是“已有任意部分进入正式战斗格”。
+function enemyFullyVisible(e){return enemyTargetable(e);}
+function enemyReachedLeftFailure(e){return Number.isFinite(e?.x)&&e.x+.5<=BOARD_RULES.leftFailCenter;}
 function nearestEnemy(row,col,range){ return game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===row&&e.x>=col-.2&&e.x-col<=range).sort((a,b)=>a.x-b.x)[0]; }
 function adjacentRows(row){const start=clamp(row-1,0,BOARD_RULES.rows-3);return [start,start+1,start+2];}
 function targetX(target){return target.isHazard?target.col:target.x;}
@@ -607,13 +643,35 @@ function visibleFlatTargets(row,col,range){const targets=combatTargetsInLane(row
 function nearestLaneTarget(row,col,range){return visibleFlatTargets(row,col,range)[0];}
 function damageTarget(target,amount,source,attacker){return target.isHazard?damageHazard(target,amount):damageEnemy(target,amount,source,attacker);}
 function targetStillPresent(target){return !!target&&(target.isHazard?game.hazards.includes(target):game.enemies.includes(target));}
-function fireQuadVolley(p,row,mult){
-  const initial=visibleFlatTargets(row,p.col,9);if(!initial.length)return 0;const shield=initial.find(target=>target.isHazard)||null;
-  for(let i=0;i<4;i++){
-    const live=visibleFlatTargets(row,p.col,9),preferred=p.rank>=2?initial[i]:initial[0],target=targetStillPresent(shield)?shield:targetStillPresent(preferred)?preferred:live[0],gap=(i-1.5)*.16,tx=target?targetX(target)+.5+gap:9.5+gap;
-    fireProjectile(p.col+.55+gap,row+.5,tx,row+.5,'rook',.3);if(target)damageTarget(target,Math.round(rollAttackDamage(UNITS.rook)*mult),p.type,p);
+function isSuperRookType(type){return type==='superRook'||UNITS[type]?.fusionBase==='superRook';}
+function isSuperQueenType(type){return type==='superQueen'||UNITS[type]?.fusionBase==='superQueen';}
+function applyElementalHit(target,attacker,mult=1){
+  if(!target||target.isHazard||!game.enemies.includes(target))return;const u=UNITS[attacker.type],rank=attacker.rank||1;
+  if(u.element==='ice'){
+    target.slowTimer=Math.max(target.slowTimer||0,3.5+(rank-1)*.25);if(rank>=2){target.royalIceHits=(target.royalIceHits||0)+1;if(target.royalIceHits%3===0){target.frozenTimer=Math.max(target.frozenTimer||0,rank>=4?2.2:1.5);if(rank>=4)target.x=Math.min(stagingXForEnemy(target.type),target.x+.4);}}
+    if(rank>=5&&target.frozenTimer>0)damageStatusEnemy(target,Math.round(u.attack*mult),attacker.type,'freeze');
+  }else if(u.element==='flame'){
+    target.burnTimer=Math.max(target.burnTimer||0,3);target.burnDps=Math.round((u.burnDps||35)*mult);target.burnSource=attacker.type;if(rank>=2)target.litTimer=Math.max(target.litTimer||0,3);
+  }else if(u.element==='poison'){
+    target.poisonTimer=Math.max(target.poisonTimer||0,8);target.poisonDps=Math.round((u.poisonDps||25)*mult);target.poisonSource=attacker.type;if(rank>=4)target.noRegenTimer=Math.max(target.noRegenTimer||0,8);
   }
+}
+function fireQuadVolley(p,row,mult){
+  const initial=visibleFlatTargets(row,p.col,9);if(!initial.length)return 0;const shield=initial.find(target=>target.isHazard)||null,u=UNITS[p.type],projectile=u.projectile||'rook';
+  for(let i=0;i<4;i++){
+    const live=visibleFlatTargets(row,p.col,9),preferred=p.rank>=2?initial[i]:initial[0],target=targetStillPresent(shield)?shield:targetStillPresent(preferred)?preferred:live[0],gap=(i-1.5)*.36,tx=target?targetX(target)+.5+gap:9.5+gap;
+    fireProjectile(p.col+.55+gap,row+.5,tx,row+.5,projectile,.3);if(target){damageTarget(target,Math.round((u.element?u.attack:rollAttackDamage(UNITS.rook))*mult),p.type,p);applyElementalHit(target,p,mult);}
+  }
+  if(u.element==='flame'&&p.rank>=4)game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&h.row===row&&h.col>p.col));
   combatVisual('doubleMuzzle',p.col+.72,row+.5);return 4;
+}
+
+function fireElementalQueenVolley(p,u,mult,attackSpeed){
+  p.attackCycles=(p.attackCycles||0)+1;const rows=p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row);let fired=0;
+  rows.forEach(row=>{const lane=visibleFlatTargets(row,p.col,9),target=u.element==='poison'&&p.rank>=2?(lane.find(e=>!e.isHazard&&(e.poisonTimer||0)<=0)||lane[0]):lane[0];if(!target)return;damageTarget(target,Math.round(u.attack*mult),p.type,p);applyElementalHit(target,p,mult);fireProjectile(p.col+.55,row+.5,targetX(target)+.5,row+.5,u.projectile,.3);combatVisual(u.element==='ice'?'iceMuzzle':u.element==='flame'?'fireMuzzle':'toxicMuzzle',p.col+.72,row+.5);fired++;});
+  if(u.element==='flame'&&p.rank>=4)game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&rows.includes(h.row)&&h.col>p.col));
+  if(u.element==='flame'&&p.rank>=5&&p.attackCycles%5===0)game.enemies.filter(e=>(e.burnTimer||0)>0).forEach(e=>damageStatusEnemy(e,Math.round(u.attack*mult),p.type,'burn'));
+  const infected=u.element==='poison'&&p.rank>=5?game.enemies.filter(e=>(e.poisonTimer||0)>0).length:0;if(fired)p.timer=Math.max(.68,(u.element==='ice'?1.3:u.element==='flame'?1.25:1.35)/(attackSpeed*(1+Math.min(.4,infected*.04))));else p.timer=.2;return fired;
 }
 
 function updateEnemies(dt){
@@ -629,7 +687,7 @@ function updateEnemies(dt){
     }
     if(data.summoner){
       e.summonTimer-=dt;
-      if(e.summonTimer<=0){ const summoned=spawnEnemy(['soldier','cannon','horse'][Math.floor(Math.random()*3)],Math.floor(Math.random()*5),.75);summoned.x=Math.min(9.2,e.x+.8);const plagueBishop=game.players.find(p=>p.type==='poisonBishop'&&p.rank>=3),carrier=game.enemies.find(x=>x!==summoned&&(x.poisonTimer||0)>0&&Math.hypot(x.x-e.x,x.row-e.row)<2);if(plagueBishop&&carrier){summoned.poisonTimer=6;summoned.poisonDps=UNITS.poisonBishop.poisonDps;summoned.poisonSource='poisonBishop';floatText(summoned.x+.5,summoned.row+.1,'援军染毒','#a9e87a');}e.summonTimer=10;pulseAt(e.x+.5,e.row+.5,'bagua');toast('八卦相召来了一枚援军'); }
+      if(e.summonTimer<=0){ const summoned=spawnEnemy(['soldier','cannon','horse'][Math.floor(Math.random()*3)],Math.floor(Math.random()*5),.75);summoned.x=Math.min(stagingXForEnemy(summoned.type),e.x+.8);const plagueBishop=game.players.find(p=>p.type==='poisonBishop'&&p.rank>=3),carrier=game.enemies.find(x=>x!==summoned&&(x.poisonTimer||0)>0&&Math.hypot(x.x-e.x,x.row-e.row)<2);if(plagueBishop&&carrier){summoned.poisonTimer=6;summoned.poisonDps=UNITS.poisonBishop.poisonDps;summoned.poisonSource='poisonBishop';floatText(summoned.x+.5,summoned.row+.1,'援军染毒','#a9e87a');}e.summonTimer=10;pulseAt(e.x+.5,e.row+.5,'bagua');toast('八卦相召来了一枚援军'); }
     }
     if(data.boss){
       e.noHitTime+=dt;e.regenTick+=dt;e.noRegenTimer=Math.max(0,(e.noRegenTimer||0)-dt);
@@ -655,7 +713,7 @@ function updateEnemies(dt){
       const aura=game.enemies.some(g=>g.type==='guard'&&g.id!==e.id&&g.row===e.row&&Math.abs(g.x-e.x)<1.4);
       e.x-=data.speed*difficulty.speed*(data.boss&&e.hp/e.maxHp<.5?1.5:1)*(aura?1.05:1)*(e.slowTimer>0?.55:1)*dt;
     }
-    if(e.x<-.25){if(game.preview){game.over=true;return;}endGame(false,"有敌军突破了最后防线");return;}
+    if(enemyReachedLeftFailure(e)){if(game.preview){game.over=true;return;}endGame(false,"有敌军深入左侧准备列80%，防线失守");return;}
   }
 }
 
@@ -686,7 +744,7 @@ function flingPlayer(p,enemy){
 }
 function damageEnemy(e,amount,source,attacker=null,alreadyBuffed=false){
   const data=ENEMIES[e.type],mode=UNITS[source]?.attackMode;
-  if(!enemyFullyVisible(e))return false;
+  if(!enemyDamageable(e))return false;
   if(!alreadyBuffed)amount*=game.config.buffData?.damage||1;
   if(data.flatImmune&&mode==='flat'){floatText(e.x+.5,e.row+.18,'格挡','#c4b7a2');pulseAt(e.x+.5,e.row+.5,'block');return false;}
   if(data.reflector&&e.reflectActive>0&&mode!=='melee'&&mode!=='support'){
@@ -704,21 +762,21 @@ function damageEnemy(e,amount,source,attacker=null,alreadyBuffed=false){
 
 function applyRankHitTraits(attacker,target,amount){
   const rank=attacker.rank||save.ranks[attacker.type]||1;if(rank<2)return;attacker.traitHits=(attacker.traitHits||0)+1;
-  const candidates=game.enemies.filter(e=>enemyFullyVisible(e)&&e!==target&&Math.hypot(e.x-target.x,e.row-target.row)<=2.1).sort((a,b)=>Math.hypot(a.x-target.x,a.row-target.row)-Math.hypot(b.x-target.x,b.row-target.row));
+  const candidates=game.enemies.filter(e=>enemyDamageable(e)&&e!==target&&Math.hypot(e.x-target.x,e.row-target.row)<=2.1).sort((a,b)=>Math.hypot(a.x-target.x,a.row-target.row)-Math.hypot(b.x-target.x,b.row-target.row));
   const splash=(targets,factor,label='扩散')=>targets.filter(e=>game.enemies.includes(e)).forEach((extra,index)=>{damageEnemy(extra,Math.round(amount*factor),attacker.type,null,true);combatVisual(UNITS[attacker.type].shape==='knight'?'lightningLink':'arcBurst',target.x+.5,target.row+.5,extra.x+.5,extra.row+.5);if(!index)floatText(extra.x+.5,extra.row+.12,label,'#f4d484');});
   if(attacker.type==='pawn'){if(rank>=3&&attacker.kills>=3)attacker.promoted=true;return;}
   if(attacker.type==='shieldPawn'){if(rank>=3)target.slowTimer=Math.max(target.slowTimer||0,2.2);if(rank>=4&&attacker.traitCooldown<=0&&attacker.col<8&&!game.players.some(p=>p!==attacker&&p.row===attacker.row&&p.col===attacker.col+1)&&!game.hazards.some(h=>h.row===attacker.row&&h.col===attacker.col+1)){attacker.col++;attacker.traitCooldown=8;floatText(attacker.col+.5,attacker.row+.1,'挪盾','#d5e4db');}return;}
   if(attacker.type==='spearPawn'){if(rank>=2&&game.enemies.includes(target))damageEnemy(target,Math.round(amount*.35),attacker.type,null,true);if(rank>=4&&(ENEMIES[target.type].giant||ENEMIES[target.type].large||ENEMIES[target.type].boss))damageEnemy(target,Math.round(target.maxHp*.01),attacker.type,null,true);if(rank>=5)game.enemies.filter(e=>e!==target&&e.row===target.row&&e.x>target.x).forEach(e=>damageEnemy(e,Math.round(amount*.45),attacker.type,null,true));return;}
   if(attacker.type==='rook'){if(rank>=4&&target.isHazard){damageHazard(target,amount*2);if(!game.hazards.includes(target)){game.energy+=25;game.energyCollected+=25;}}return;}
-  if(['twinRook','iceRook','flameRook','poisonRook','knight','stormKnight','bishop','twinBishop','queen','prismQueen'].includes(attacker.type))return;
+  if(UNITS[attacker.type]?.element||['twinRook','knight','stormKnight','bishop','twinBishop','queen','prismQueen','superRook','superQueen'].includes(attacker.type))return;
 }
 
 function triggerPlayerDeathTrait(p){
   const rank=p.rank||save.ranks[p.type]||1;if(rank<5||p.deathTraitFired)return;p.deathTraitFired=true;
   // 五阶不再默认绑定阵亡效果；成长质变在存活时持续生效。
 }
-function damageStatusEnemy(e,amount,source,kind){if(!amount||!source||!enemyFullyVisible(e))return false;amount*=game.config.buffData?.damage||1;e.hp-=amount;if(ENEMIES[e.type]?.boss){e.noHitTime=0;e.regenTick=0;}floatText(e.x+.5,e.row+.18,`-${Math.round(amount)}`,kind==='burn'?'#ff9d55':'#a8e66f');pulseAt(e.x+.5,e.row+.5,kind);if(e.hp<=0)defeatEnemy(e,source);return true;}
-function defeatEnemy(e,source){const data=ENEMIES[e.type],killer=game.players.find(p=>p.type===source);fallenEnemy(e);if(killer){killer.kills=(killer.kills||0)+1;if(killer.type==='pawn'&&killer.rank>=3&&killer.kills===3){killer.promoted=true;floatText(killer.col+.5,killer.row+.1,'过河升变!','#ffe088');}if(killer.type==='pawn'&&killer.rank>=5&&killer.promoted){game.energy+=15;game.energyCollected+=15;killer.timer=0;}if(killer.type==='berserkerPawn'&&killer.rank>=4){killer.rageTimer=3;floatText(killer.col+.5,killer.row+.1,'斩敌暴怒!','#ff7767');}if(killer.type==='flameRook'&&killer.rank>=4&&e.burnTimer>0){const next=game.enemies.filter(x=>enemyFullyVisible(x)&&x!==e&&x.row===e.row&&x.burnTimer<=0).sort((a,b)=>a.x-b.x)[0];if(next){next.burnTimer=3;next.burnDps=e.burnDps;next.burnSource=source;floatText(next.x+.5,next.row+.1,'火种接力','#ff9b55');}}if(killer.type==='poisonRook'&&killer.rank>=5&&e.poisonTimer>0){const col=clamp(Math.floor(e.x),0,8);if(!game.players.some(p=>p.row===e.row&&p.col===col))game.players.push({id:++game.entityId,type:'shieldPawn',spore:true,row:e.row,col,hp:300,maxHp:300,timer:99,rank:1,expire:3});}}
+function damageStatusEnemy(e,amount,source,kind){if(!amount||!source||!enemyDamageable(e))return false;amount*=game.config.buffData?.damage||1;e.hp-=amount;if(ENEMIES[e.type]?.boss){e.noHitTime=0;e.regenTick=0;}floatText(e.x+.5,e.row+.18,`-${Math.round(amount)}`,kind==='burn'?'#ff9d55':'#a8e66f');pulseAt(e.x+.5,e.row+.5,kind);if(e.hp<=0)defeatEnemy(e,source);return true;}
+function defeatEnemy(e,source){const data=ENEMIES[e.type],killer=game.players.find(p=>p.type===source);fallenEnemy(e);if(killer){killer.kills=(killer.kills||0)+1;if(killer.type==='pawn'&&killer.rank>=3&&killer.kills===3){killer.promoted=true;floatText(killer.col+.5,killer.row+.1,'过河升变!','#ffe088');}if(killer.type==='pawn'&&killer.rank>=5&&killer.promoted){game.energy+=15;game.energyCollected+=15;killer.timer=0;}if(killer.type==='berserkerPawn'&&killer.rank>=4){killer.rageTimer=3;floatText(killer.col+.5,killer.row+.1,'斩敌暴怒!','#ff7767');}if(UNITS[killer.type]?.element==='flame'&&killer.rank>=4&&e.burnTimer>0){const next=game.enemies.filter(x=>enemyFullyVisible(x)&&x!==e&&x.row===e.row&&x.burnTimer<=0).sort((a,b)=>a.x-b.x)[0];if(next){next.burnTimer=3;next.burnDps=e.burnDps;next.burnSource=source;floatText(next.x+.5,next.row+.1,'火种接力','#ff9b55');}}if(UNITS[killer.type]?.element==='poison'&&killer.rank>=5&&e.poisonTimer>0){const col=clamp(Math.floor(e.x),0,8);if(!game.players.some(p=>p.row===e.row&&p.col===col))game.players.push({id:++game.entityId,type:'shieldPawn',spore:true,row:e.row,col,hp:300,maxHp:300,timer:99,rank:1,expire:3});}}
   if(data.leavesShield)leaveShieldAt(e);if(data.beanDrop&&Math.random()<(data.beanChance??.5))dropEnergyBeans(e,data.beanDrop);game.enemies=game.enemies.filter(x=>x!==e);game.kills++;if(!game.preview){save.mastery[source]=(save.mastery[source]||0)+.8;checkRanks(source);}}
 function once(fn){let called=false;return()=>{if(called)return;called=true;fn?.();};}
 function flyResourceToCounter(sourceEl,targetSelector,kind,onArrive){
@@ -769,7 +827,7 @@ function updateProjectiles(dt){ game.projectiles.forEach(p=>p.t+=dt); game.proje
 
 function spawnEnergyOrb(){
   if(!game||game.over) return;
-  const owner=game,orb=document.createElement('button');orb.className='energy-orb';orb.textContent='✦';orb.style.left=`${(1+Math.random()*7)*100/9}%`;orb.style.top=`${(.5+Math.random()*4)*20}%`;
+  const owner=game,orb=document.createElement('button');orb.className='energy-orb';orb.textContent='✦';orb.style.left=`${boardXPercent(1+Math.random()*7)}%`;orb.style.top=`${boardYPercent(.5+Math.random()*4)}%`;
   const collect=automatic=>{
     if(game!==owner||owner.over||!orb.isConnected||orb.dataset.claimed)return;orb.dataset.claimed='true';
     const finish=()=>{if(game!==owner||owner.over)return;owner.energy+=50;owner.energyCollected+=50;updateGameHeader();floatText(4.5,2.5,'+50','#ffe78d');};
@@ -782,21 +840,21 @@ function renderEntities(state=game,layer=$("#entityLayer")){
   if(!state||!layer)return;
   layer.innerHTML="";
   state.players.forEach(p=>{
-    const u=UNITS[p.type];if((p.ultGlowTimer||0)>0){const glow=document.createElement('i');glow.className=`ultimate-tile-glow glow-${p.type}`;glow.style.left=`${(p.col+.5)*100/9}%`;glow.style.top=`${(p.row+.5)*20}%`;glow.style.setProperty('--ultimate-color',u.color);layer.append(glow);}const el=document.createElement('div');el.className=`piece player-piece player-${p.type} ${p.weaponHidden>0?'weapon-hidden':''} ${p.beanArmor>0?'bean-armored':''}`;el.style.left=`${(p.col+.5)*100/9}%`;el.style.top=`${(p.row+.5)*20}%`;el.style.color=u.color;
+    const u=UNITS[p.type];if((p.ultGlowTimer||0)>0){const glow=document.createElement('i');glow.className=`ultimate-tile-glow glow-${p.type}`;glow.style.left=`${boardXPercent(p.col+.5)}%`;glow.style.top=`${boardYPercent(p.row+.5)}%`;glow.style.setProperty('--ultimate-color',u.color);layer.append(glow);}const el=document.createElement('div');el.className=`piece player-piece player-${p.type} ${p.weaponHidden>0?'weapon-hidden':''} ${p.beanArmor>0?'bean-armored':''}`;el.style.left=`${boardXPercent(p.col+.5)}%`;el.style.top=`${boardYPercent(p.row+.5)}%`;el.style.color=u.color;
     el.innerHTML=`${unitArt(p.type,'battle-art')}<span class="hp-bar"><i style="width:${clamp(p.hp/p.maxHp*100,0,100)}%"></i></span>${p.beanArmor>0?`<span class="armor-bar"><i style="width:${clamp(p.beanArmor/2000*100,0,100)}%"></i></span>`:''}<span class="rank-pips">${'◆'.repeat(p.rank)}</span>`;layer.append(el);
   });
   state.enemies.forEach(e=>{
-    const d=ENEMIES[e.type],el=document.createElement('div');el.className=`piece enemy-piece enemy-${e.type} ${d.boss?'boss-piece':''} ${d.giant?'giant-piece':''} ${d.large?'large-piece':''} ${d.summoner?'elephant-piece':''} ${e.slowTimer>0?'slowed-piece':''} ${e.burnTimer>0?'burning-piece':''} ${e.poisonTimer>0?'poisoned-piece':''} ${e.vulnerableTimer>0?'vulnerable-piece':''} ${e.shadowMarks>0?'shadow-marked':''} ${e.reflectActive>0?'reflecting-piece':''}`;el.style.left=`${(e.x+.5)*100/9}%`;el.style.top=`${(e.row+.5)*20}%`;
+    const d=ENEMIES[e.type],el=document.createElement('div');el.className=`piece enemy-piece enemy-${e.type} ${d.boss?'boss-piece':''} ${d.giant?'giant-piece':''} ${d.large?'large-piece':''} ${d.summoner?'elephant-piece':''} ${e.slowTimer>0?'slowed-piece':''} ${e.burnTimer>0?'burning-piece':''} ${e.poisonTimer>0?'poisoned-piece':''} ${e.vulnerableTimer>0?'vulnerable-piece':''} ${e.shadowMarks>0?'shadow-marked':''} ${e.reflectActive>0?'reflecting-piece':''}`;el.style.left=`${boardXPercent(e.x+.5)}%`;el.style.top=`${boardYPercent(e.row+.5)}%`;
     el.innerHTML=`${enemyDecoration(e.type)}<span class="piece-symbol">${d.char}</span><span class="hp-bar"><i style="width:${clamp(e.hp/e.maxHp*100,0,100)}%"></i></span>`;layer.append(el);
   });
-  state.hazards.forEach(h=>{const el=document.createElement('div');el.className=`board-hazard ${h.type}-hazard`;el.style.left=`${(h.col+.5)*100/9}%`;el.style.top=`${(h.row+.5)*20}%`;el.innerHTML=h.type==='shield'?`<span>盾</span><span class="hp-bar"><i style="width:${clamp(h.hp/h.maxHp*100,0,100)}%"></i></span>`:'<span>❄</span>';layer.append(el);});
-  (state.beanDrops||[]).forEach(drop=>{const el=document.createElement('button');el.className='energy-bean-drop';el.dataset.beanId=drop.id;el.title='拾取能量豆（1.5秒后自动收入）';el.style.left=`${(drop.x+.5)*100/9}%`;el.style.top=`${(drop.row+.5)*20}%`;el.innerHTML='<span><i></i></span>';el.onclick=()=>collectEnergyBean(drop);layer.append(el);});
-  state.projectiles.forEach(p=>{ const t=clamp(p.t/p.duration,0,1),x=p.x+(p.tx-p.x)*t,arc=(p.kind==='spearPawn'?Math.sin(Math.PI*t)*.72:p.kind==='spearVolley'?Math.sin(Math.PI*t)*1.05:0),y=p.y+(p.ty-p.y)*t-arc,el=document.createElement('i');el.className=`projectile proj-${p.kind||'gold'}`;el.style.left=`${x*100/9}%`;el.style.top=`${y*20}%`;el.style.setProperty('--shot-angle',`${Math.atan2((p.ty-p.y)*5,(p.tx-p.x)*9)}rad`);el.style.setProperty('--shot-spin',`${t*720}deg`);layer.append(el); });
+  state.hazards.forEach(h=>{const el=document.createElement('div');el.className=`board-hazard ${h.type}-hazard`;el.style.left=`${boardXPercent(h.col+.5)}%`;el.style.top=`${boardYPercent(h.row+.5)}%`;el.innerHTML=h.type==='shield'?`<span>盾</span><span class="hp-bar"><i style="width:${clamp(h.hp/h.maxHp*100,0,100)}%"></i></span>`:'<span>❄</span>';layer.append(el);});
+  (state.beanDrops||[]).forEach(drop=>{const el=document.createElement('button');el.className='energy-bean-drop';el.dataset.beanId=drop.id;el.title='拾取能量豆（1.5秒后自动收入）';el.style.left=`${boardXPercent(drop.x+.5)}%`;el.style.top=`${boardYPercent(drop.row+.5)}%`;el.innerHTML='<span><i></i></span>';el.onclick=()=>collectEnergyBean(drop);layer.append(el);});
+  state.projectiles.forEach(p=>{ const t=clamp(p.t/p.duration,0,1),x=p.x+(p.tx-p.x)*t,arc=(p.kind==='spearPawn'?Math.sin(Math.PI*t)*.72:p.kind==='spearVolley'?Math.sin(Math.PI*t)*1.05:0),y=p.y+(p.ty-p.y)*t-arc,el=document.createElement('i');el.className=`projectile proj-${p.kind||'gold'}`;el.style.left=`${boardXPercent(x)}%`;el.style.top=`${boardYPercent(y)}%`;el.style.setProperty('--shot-angle',`${Math.atan2(p.ty-p.y,p.tx-p.x)}rad`);el.style.setProperty('--shot-spin',`${t*720}deg`);layer.append(el); });
 }
 
 function getEffectLayer(){return effectLayerOverride||$("#effectLayer");}
 function floatText(x,y,text,color){
-  const el=document.createElement('span');el.className='damage-number';el.textContent=text;el.style.color=color;el.style.left=`${x*100/9}%`;el.style.top=`${y*20}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),850);
+  const el=document.createElement('span');el.className='damage-number';el.textContent=text;el.style.color=color;el.style.left=`${boardXPercent(x)}%`;el.style.top=`${boardYPercent(y)}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),850);
 }
 function enemyDecoration(type){
   if(type==='digger')return '<span class="shovel-prop"><i></i></span>';
@@ -804,14 +862,14 @@ function enemyDecoration(type){
   if(type==='jester')return '<span class="mirror-orbit"><i></i><i></i><i></i><i></i></span>';
   return '';
 }
-function pulseAt(x,y,kind='hit'){ const el=document.createElement('i');el.className=`hit-flash effect-${kind}`;el.style.left=`${x*100/9}%`;el.style.top=`${y*20}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),750); }
+function pulseAt(x,y,kind='hit'){ const el=document.createElement('i');el.className=`hit-flash effect-${kind}`;el.style.left=`${boardXPercent(x)}%`;el.style.top=`${boardYPercent(y)}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),750); }
 function combatVisual(type,x,y,tx=x,ty=y){
-  const el=document.createElement('i'),distance=Math.hypot(tx-x,ty-y),angle=Math.atan2(ty-y,tx-x);el.className=`combat-visual visual-${type}`;el.style.left=`${x*100/9}%`;el.style.top=`${y*20}%`;el.style.setProperty('--visual-distance',`${distance}`);el.style.setProperty('--visual-angle',`${angle}rad`);el.innerHTML='<b></b><span></span>';getEffectLayer().append(el);setTimeout(()=>el.remove(),type==='knightCharge'||type==='rapidCharge'||type==='stormCloud'?1700:1100);return el;
+  const el=document.createElement('i'),distance=Math.hypot(tx-x,ty-y),angle=Math.atan2(ty-y,tx-x);el.className=`combat-visual visual-${type}`;el.style.left=`${boardXPercent(x)}%`;el.style.top=`${boardYPercent(y)}%`;el.style.setProperty('--visual-distance',`${distance}`);el.style.setProperty('--visual-angle',`${angle}rad`);el.innerHTML='<b></b><span></span>';getEffectLayer().append(el);setTimeout(()=>el.remove(),type==='knightCharge'||type==='rapidCharge'||type==='stormCloud'?1700:1100);return el;
 }
-function flattenPiece(x,y,type,reason){ const el=document.createElement('span');el.className=`flattened-piece ${reason}`;el.innerHTML=unitArt(type,'effect-art');el.style.left=`${x*100/9}%`;el.style.top=`${y*20}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),1100); }
-function flingPiece(x,y,type){const el=document.createElement('span');el.className='flung-piece';el.innerHTML=unitArt(type,'effect-art');el.style.left=`${x*100/9}%`;el.style.top=`${y*20}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),1200);}
-function fallenPlayer(x,y,type){const el=document.createElement('span');el.className='fallen-unit fallen-player';el.innerHTML=unitArt(type,'effect-art');el.style.left=`${x*100/9}%`;el.style.top=`${y*20}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),1500);}
-function fallenEnemy(enemy){const d=ENEMIES[enemy.type],el=document.createElement('span');el.className=`fallen-unit fallen-enemy ${d.large||d.giant?'fallen-large':''}`;el.textContent=d.char;el.style.left=`${(enemy.x+.5)*100/9}%`;el.style.top=`${(enemy.row+.5)*20}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),1500);}
+function flattenPiece(x,y,type,reason){ const el=document.createElement('span');el.className=`flattened-piece ${reason}`;el.innerHTML=unitArt(type,'effect-art');el.style.left=`${boardXPercent(x)}%`;el.style.top=`${boardYPercent(y)}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),1100); }
+function flingPiece(x,y,type){const el=document.createElement('span');el.className='flung-piece';el.innerHTML=unitArt(type,'effect-art');el.style.left=`${boardXPercent(x)}%`;el.style.top=`${boardYPercent(y)}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),1200);}
+function fallenPlayer(x,y,type){const el=document.createElement('span');el.className='fallen-unit fallen-player';el.innerHTML=unitArt(type,'effect-art');el.style.left=`${boardXPercent(x)}%`;el.style.top=`${boardYPercent(y)}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),1500);}
+function fallenEnemy(enemy){const d=ENEMIES[enemy.type],el=document.createElement('span');el.className=`fallen-unit fallen-enemy ${d.large||d.giant?'fallen-large':''}`;el.textContent=d.char;el.style.left=`${boardXPercent(enemy.x+.5)}%`;el.style.top=`${boardYPercent(enemy.row+.5)}%`;getEffectLayer().append(el);setTimeout(()=>el.remove(),1500);}
 
 function updateGameHeader(){
   if(!game)return;
