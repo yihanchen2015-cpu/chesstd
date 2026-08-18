@@ -345,15 +345,13 @@ function activateEnergyBean(p,options={}){
   }else if(isSuperRookType(p.type)){
     combatVisual('royalSweep',p.col+.5,p.row+.5);queueFanAbility(p,spec);
   }else if(p.type==='iceRook'){
-    combatVisual('iceWave',p.col+.55,p.row+.5,9.25,p.row+.5);
-    for(let col=p.col+1;col<BOARD_RULES.cols;col++){addIceHazard(p.row,col);combatVisual('iceRise',col+.5,p.row+.5);}
-    [...game.enemies].filter(e=>enemyDamageable(e)&&e.row===p.row).forEach(e=>damageStatusEnemy(e,spec.freezeDamage,p.type,'freeze'));
-    queueRapidAbility(p,spec.shots,spec.interval,spec.projectile);
+    combatVisual('iceWave',p.col+.55,p.row+.5,9.25,p.row+.5);queueRapidAbility(p,spec.shots,spec.interval,spec.projectile);
   }else if(p.type==='flameRook'){
     combatVisual('fireVortex',p.col+.5,p.row+.5);queueRapidAbility(p,spec.shots,spec.interval,spec.projectile);
+  }else if(p.type==='electricRook'){
+    combatVisual('lightningStrike',p.col+.6,p.row+.5);queueRapidAbility(p,spec.shots,spec.interval,spec.projectile);
   }else if(p.type==='poisonRook'){
-    fireProjectile(p.col+.5,p.row+.62,9.6,p.row+.62,spec.projectile,1.55);combatVisual('toxicLaunch',p.col+.5,p.row+.5);combatVisual('toxicWave',p.col+.5,p.row+.62,9.4,p.row+.62);
-    [...game.enemies].filter(e=>enemyDamageable(e)&&e.row===p.row&&e.x>p.col).forEach(e=>damageStatusEnemy(e,spec.damage,p.type,'poison'));
+    fireProjectile(p.col+.5,p.row+.62,9.6,p.row+.62,spec.projectile,1.55,{damage:Math.round(spec.damage*mult),sourceType:p.type,sourceRank:p.rank,attacker:p,pierce:true,allowedRows:[p.row]});combatVisual('toxicLaunch',p.col+.5,p.row+.5);combatVisual('toxicWave',p.col+.5,p.row+.62,9.4,p.row+.62);
   }else if(p.type==='bombardRook'){
     const targets=[...game.enemies].filter(enemyDamageable).sort((a,b)=>b.hp-a.hp).slice(0,spec.maxTargets);targets.forEach(target=>{damageStatusEnemy(target,Math.round(spec.damage*mult),p.type,'bombard');game.enemies.filter(e=>e!==target&&Math.hypot(e.x-target.x,e.row-target.row)<=1.5).slice(0,3).forEach(e=>damageStatusEnemy(e,Math.round(spec.damage*spec.splash*mult),p.type,'bombard'));combatVisual('fireVortex',target.x+.5,target.row+.5);});combatVisual('stormCloud',4.5,2.5);
   }else if(p.type==='king'){
@@ -375,15 +373,15 @@ function activateEnergyBean(p,options={}){
   }else if(['bishop','twinBishop','iceBishop','flameBishop'].includes(p.type)){
     const damage=Math.round(spec.damage*mult);[...game.enemies].filter(e=>enemyDamageable(e)&&Math.abs(Math.abs(e.x-p.col)-Math.abs(e.row-p.row))<1.25).forEach(e=>{damageStatusEnemy(e,damage,p.type,p.type==='iceBishop'?'freeze':p.type==='flameBishop'?'burn':'arc');if(game.enemies.includes(e)&&p.type==='iceBishop'){e.frozenTimer=spec.freezeSeconds;e.slowTimer=spec.freezeSeconds;}if(game.enemies.includes(e)&&p.type==='flameBishop'){e.burnTimer=spec.burnSeconds;e.burnDps=spec.burnDps;e.burnSource=p.type;}combatVisual('arcBurst',e.x+.5,e.row+.5);});if(p.type==='flameBishop')game.hazards=game.hazards.filter(h=>h.type!=='ice');combatVisual('diagonalCross',p.col+.5,p.row+.5);combatVisual('arcMandala',p.col+.5,p.row+.5);
   }else if(p.type==='poisonBishop'){
-    game.enemies.filter(enemyDamageable).forEach(e=>{damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'poison');if(game.enemies.includes(e)){e.poisonTimer=spec.poisonSeconds;e.poisonDps=spec.poisonDps;e.poisonSource=p.type;e.noRegenTimer=spec.poisonSeconds;}});combatVisual('toxicWave',p.col+.5,p.row+.5,9.3,p.row+.5);combatVisual('arcMandala',p.col+.5,p.row+.5);
+    game.enemies.filter(enemyDamageable).forEach(e=>{damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'poison');if(game.enemies.includes(e)){applyPoisonStatus(e,{duration:spec.poisonSeconds,dps:spec.poisonDps,sourceType:p.type});e.noRegenTimer=spec.poisonSeconds;}});combatVisual('toxicWave',p.col+.5,p.row+.5,9.3,p.row+.5);combatVisual('arcMandala',p.col+.5,p.row+.5);
   }else if(p.type==='lightBishop'){
     game.players.forEach(ally=>{healPlayer(ally,Math.round(spec.healAll*mult));ally.beanArmor=(ally.beanArmor||0)+Math.round(spec.armorAll*mult);});game.enemies.filter(enemyDamageable).forEach(e=>damageStatusEnemy(e,Math.round(spec.damage*mult),p.type,'radiance'));combatVisual('royalPillars',p.col+.5,p.row+.5);combatVisual('arcMandala',p.col+.5,p.row+.5);
   }else if(p.type==='queen'){
     combatVisual('royalSweep',p.col+.5,p.row+.5);queueMultiLaneAbility(p,spec,'queenRapid');
   }else if(p.type==='twinQueen'){
     combatVisual('royalSweep',p.col+.5,p.row+.5);queueMultiLaneAbility(p,spec,'queenRapid');combatVisual('doubleMuzzle',p.col+.7,p.row+.5);
-  }else if(['iceQueen','flameQueen','poisonQueen'].includes(p.type)){
-    const rows=adjacentRows(p.row);if(p.type==='iceQueen'){rows.forEach(row=>combatVisual('iceWave',p.col+.55,row+.5,9.25,row+.5));game.enemies.filter(e=>enemyDamageable(e)&&rows.includes(e.row)).forEach(e=>damageStatusEnemy(e,spec.freezeDamage,p.type,'freeze'));}if(p.type==='flameQueen')game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&rows.includes(h.row)&&h.col>p.col));queueMultiLaneAbility(p,spec,'queenRapid');combatVisual(p.type==='iceQueen'?'iceWave':p.type==='flameQueen'?'fireVortex':'toxicWave',p.col+.5,p.row+.5);
+  }else if(['iceQueen','flameQueen','poisonQueen','electricQueen'].includes(p.type)){
+    const rows=adjacentRows(p.row);if(p.type==='iceQueen')rows.forEach(row=>combatVisual('iceWave',p.col+.55,row+.5,9.25,row+.5));if(p.type==='flameQueen')game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&rows.includes(h.row)&&h.col>p.col));queueMultiLaneAbility(p,spec,'queenRapid');combatVisual(p.type==='iceQueen'?'iceWave':p.type==='flameQueen'?'fireVortex':p.type==='electricQueen'?'lightningStrike':'toxicWave',p.col+.5,p.row+.5);
   }else if(p.type==='prismQueen'){
     combatVisual('prismBurst',p.col+.5,p.row+.5);queueMultiLaneAbility(p,spec,'prismRapid');
   }else if(p.type==='shadowQueen'){
@@ -404,20 +402,23 @@ function updateInfiniteUltimates(dt){
 
 function queueRapidAbility(p,count,interval,kind){game.abilityEvents=game.abilityEvents||[];const paired=p.type==='twinRook';for(let i=0;i<count;i++)game.abilityEvents.push({t:paired?Math.floor(i/2)*interval*2:i*interval,kind:'rapid',variant:kind,sourceType:p.type,sourceId:p.id,row:p.row,col:p.col,rank:p.rank,barrel:paired?i%2:null});const charge=combatVisual('rapidCharge',p.col+.5,p.row+.5);charge.classList.add(`visual-charge-${p.type}`);}
 function queueMultiLaneAbility(p,spec,kind){game.abilityEvents=game.abilityEvents||[];const paired=p.type==='twinQueen';for(let i=0;i<spec.shots;i++)game.abilityEvents.push({t:paired?Math.floor(i/2)*spec.interval*2:i*spec.interval,kind,sourceType:p.type,sourceId:p.id,row:p.row,col:p.col,rank:p.rank,barrel:paired?i%2:null});const charge=combatVisual('rapidCharge',p.col+.5,p.row+.5);charge.classList.add(`visual-charge-${p.type}`);}
+function iceShotProfile(rank=1){const chance=rank>=4?ICE_SHARD_RULES.rank4Chance:rank>=3?ICE_SHARD_RULES.rank3Chance:0,shard=chance>0&&Math.random()<chance;return {kind:shard?'giantIce':'iceRook',shard};}
+function projectileMuzzle(element){return element==='ice'?'iceMuzzle':element==='flame'?'fireMuzzle':element==='poison'?'toxicMuzzle':element==='electric'?'electricMuzzle':'muzzle';}
+function abilityProjectile(spec,rank){return spec.element==='ice'?iceShotProfile(rank):{kind:spec.projectile||'rook',shard:false};}
 function queueFanAbility(p,spec){
   game.abilityEvents=game.abilityEvents||[];const rows=spec.lanes===3?adjacentRows(p.row):[p.row],rings=spec.rings||5,shotsPerRing=spec.shotsPerRing||Math.ceil((spec.perLane||spec.shots)/rings);
   rows.forEach((row,lane)=>{for(let ring=0;ring<rings;ring++){for(let slot=0;slot<shotsPerRing;slot++){const progress=shotsPerRing===1?.5:slot/(shotsPerRing-1),flightScale=.88+((slot*5+ring*3)%9)*.03;game.abilityEvents.push({t:ring*(spec.ringInterval||spec.duration/rings),kind:'fanRapid',sourceType:p.type,sourceId:p.id,row,col:p.col,rank:p.rank,angle:(progress-.5)*spec.fanDegrees,flightScale,lane,ring,slot,shot:ring*shotsPerRing+slot});}}});
   const charge=combatVisual('rapidCharge',p.col+.5,p.row+.5);charge.classList.add(`visual-charge-${p.type}`);
 }
-function firePairedProjectiles(x,y,firstTarget,secondTarget,kind='twinRook'){
+function firePairedProjectiles(x,y,firstTarget,secondTarget,kind='twinRook',firstHit=null,secondHit=null){
   // 双弹共用同一水平弹道，用 x 偏移保持“前后紧邻”，不再上下竖排。
   const gap=.3;
-  fireProjectile(x+gap,y,targetX(firstTarget)+.5+gap,firstTarget.row+.5,kind);
-  fireProjectile(x-gap,y,targetX(secondTarget)+.5-gap,secondTarget.row+.5,kind);
+  fireProjectile(x+gap,y,targetX(firstTarget)+.5+gap,firstTarget.row+.5,kind,0,firstHit);
+  fireProjectile(x-gap,y,targetX(secondTarget)+.5-gap,secondTarget.row+.5,kind,0,secondHit);
 }
 function fireRookShot(p,target,mult,storedMult=1){
   const present=target.isHazard?game.hazards.includes(target):game.enemies.includes(target);if(!present)return false;
-  damageTarget(target,Math.round(rollAttackDamage(UNITS.rook)*mult*storedMult),p.type,p);flashShot(p,target);combatVisual('muzzle',p.col+.72,p.row+.5);return true;
+  flashShot(p,target,Math.round(rollAttackDamage(UNITS.rook)*mult*storedMult));combatVisual('muzzle',p.col+.72,p.row+.5);return true;
 }
 function fireRookAttack(p,target,mult,storedMult=1){
   const shots=p.rank>=5&&Math.random()<ROOK_OVERLOAD.chance?ROOK_OVERLOAD.shots:1;
@@ -442,14 +443,13 @@ function executeAbilityEvent(event){
   }
   if(event.kind==='fanRapid'){
     const spec=ABILITY_SPECS[event.sourceType],mult=rankMult(event.sourceType,event.rank),attacker=game.players.find(p=>p.id===event.sourceId)||null,angle=event.angle*Math.PI/180,ox=event.col+.58,oy=event.row+.5,tx=9.65,ty=oy+Math.tan(angle)*(tx-ox);
-    const target=[...game.enemies.filter(enemyDamageable),...game.hazards.filter(h=>h.type==='shield')].filter(candidate=>{const cx=targetX(candidate)+.5;if(cx<=ox)return false;const rayY=oy+Math.tan(angle)*(cx-ox);return Math.abs(candidate.row+.5-rayY)<=.48;}).sort((a,b)=>targetX(a)-targetX(b))[0];
-    fireProjectile(ox,oy,tx,ty,spec.projectile,(spec.flightSeconds||1.5)*(event.flightScale||1));if(event.slot===0)combatVisual(spec.element==='ice'?'iceMuzzle':spec.element==='flame'?'fireMuzzle':spec.element==='poison'?'toxicMuzzle':'muzzle',ox+.12,oy);if(target){const amount=spec.damageMin+Math.random()*(spec.damageMax-spec.damageMin);damageTarget(target,Math.round(amount*mult),event.sourceType,attacker);if(attacker)applyElementalHit(target,attacker,mult);}return;
+    const amount=spec.damageMin+Math.random()*(spec.damageMax-spec.damageMin),shot=abilityProjectile(spec,event.rank);fireProjectile(ox,oy,tx,ty,shot.kind,(spec.flightSeconds||1.5)*(event.flightScale||1),{damage:Math.round(amount*mult),sourceType:event.sourceType,sourceId:event.sourceId,sourceRank:event.rank,attacker,effect:spec.element?'elemental':null,mult,iceShard:shot.shard,pierce:spec.pierce||spec.element==='electric'});if(event.slot===0)combatVisual(projectileMuzzle(spec.element),ox+.12,oy);return;
   }
   if(event.kind==='queenRapid'||event.kind==='prismRapid'){
     const spec=ABILITY_SPECS[event.sourceType],mult=rankMult(event.sourceType,event.rank),attacker=game.players.find(p=>p.id===event.sourceId)||null;
     adjacentRows(event.row).forEach(row=>{
       if(event.kind==='queenRapid'){
-        const target=nearestLaneTarget(row,event.col,9),tx=target?targetX(target)+.5:9.5,shotY=row+.5+(event.barrel==null?0:event.barrel?.09:-.09),projectile=spec.projectile||'rook';fireProjectile(event.col+.6,shotY,tx,shotY,projectile);combatVisual(spec.element==='ice'?'iceMuzzle':spec.element==='flame'?'fireMuzzle':spec.element==='poison'?'toxicMuzzle':'muzzle',event.col+.75,shotY);if(target){const amount=spec.damageMin?spec.damageMin+Math.random()*(spec.damageMax-spec.damageMin):spec.damage;damageTarget(target,Math.round(amount*mult),event.sourceType,attacker);if(attacker)applyElementalHit(target,attacker,mult);}
+        const shotY=row+.5+(event.barrel==null?0:event.barrel?.09:-.09),shot=abilityProjectile(spec,event.rank),amount=spec.damageMin?spec.damageMin+Math.random()*(spec.damageMax-spec.damageMin):spec.damage;fireProjectile(event.col+.6,shotY,9.65,shotY,shot.kind,0,{damage:Math.round(amount*mult),sourceType:event.sourceType,sourceId:event.sourceId,sourceRank:event.rank,attacker,effect:spec.element?'elemental':null,mult,iceShard:shot.shard,pierce:spec.pierce||spec.element==='electric',allowedRows:[row]});combatVisual(projectileMuzzle(spec.element),event.col+.75,shotY);
       }else{
         combatVisual('prismLane',event.col+.5,row+.5,9.3,row+.5);game.enemies.filter(e=>enemyDamageable(e)&&e.row===row&&e.x>event.col).forEach(e=>damageEnemy(e,Math.round(spec.damage*mult),event.sourceType,attacker));
       }
@@ -458,15 +458,10 @@ function executeAbilityEvent(event){
   if(event.kind!=='rapid')return;
   const mult=rankMult(event.sourceType,event.rank),variant=event.variant;
   if(variant==='spearVolley'){
-    const spec=ABILITY_SPECS[event.sourceType],target=game.enemies.filter(e=>enemyDamageable(e)&&e.row===event.row&&e.x>event.col).sort((a,b)=>a.x-b.x)[0],tx=target?target.x+.5:9.5;fireProjectile(event.col+.62,event.row+.25,tx,event.row+.5,'spearVolley');combatVisual('spearRelease',event.col+.62,event.row+.3);if(target)damageEnemy(target,Math.round(spec.damage*mult),event.sourceType,game.players.find(p=>p.id===event.sourceId)||null);return;
+    const spec=ABILITY_SPECS[event.sourceType],attacker=game.players.find(p=>p.id===event.sourceId)||null;fireProjectile(event.col+.62,event.row+.25,9.65,event.row+.5,'spearVolley',0,{damage:Math.round(spec.damage*mult),sourceType:event.sourceType,sourceId:event.sourceId,sourceRank:event.rank,attacker,allowedRows:[event.row]});combatVisual('spearRelease',event.col+.62,event.row+.3);return;
   }
-  const target=nearestLaneTarget(event.row,event.col,9),tx=target?targetX(target)+.5:9.5,ty=event.row+.5+(event.barrel==null?0:event.barrel?.09:-.09);
-  fireProjectile(event.col+.6,ty,tx,ty,variant);combatVisual(variant==='iceRook'?'iceMuzzle':variant==='flameRook'?'fireMuzzle':'muzzle',event.col+.75,ty);
-  if(!target)return;
-  const spec=ABILITY_SPECS[event.sourceType];let amount=spec.damage??UNITS[variant].attack;if(spec.damageMin)amount=spec.damageMin+Math.random()*(spec.damageMax-spec.damageMin);
-  const hit=damageTarget(target,Math.round(amount*mult),event.sourceType,game.players.find(p=>p.id===event.sourceId)||null);
-  if(hit&&!target.isHazard&&variant==='iceRook')target.slowTimer=Math.max(target.slowTimer||0,3.5);
-  if(hit&&!target.isHazard&&variant==='flameRook'){target.burnTimer=spec.burnSeconds;target.burnDps=Math.round(spec.burnDps*mult);target.burnSource=event.sourceType;}
+  const ty=event.row+.5+(event.barrel==null?0:event.barrel?.09:-.09),spec=ABILITY_SPECS[event.sourceType],attacker=game.players.find(p=>p.id===event.sourceId)||null,shot=abilityProjectile(spec,event.rank);let amount=spec.damage??UNITS[variant].attack;if(spec.damageMin)amount=spec.damageMin+Math.random()*(spec.damageMax-spec.damageMin);
+  fireProjectile(event.col+.6,ty,9.65,ty,shot.kind,0,{damage:Math.round(amount*mult),sourceType:event.sourceType,sourceId:event.sourceId,sourceRank:event.rank,attacker,effect:spec.element==='ice'?'iceRook':spec.element?'elemental':null,mult,iceShard:shot.shard,pierce:spec.pierce||spec.element==='electric',allowedRows:[event.row]});combatVisual(projectileMuzzle(spec.element),event.col+.75,ty);
 }
 
 function gameLoop(now){
@@ -578,7 +573,7 @@ function updatePlayers(dt){
       [...game.enemies.filter(e=>enemyFullyVisible(e)&&Math.abs(e.x-p.col)<.65&&Math.abs(e.row-p.row)<=4),...game.hazards.filter(h=>h.type==='shield'&&Math.abs(h.col-p.col)<.65)].slice(0,2).forEach(e=>{if(fireRookAttack(p,e,mult))hit=true;});
       p.timer=hit?Math.max(.75,1.2-(p.rank-1)*.06)/attackSpeed:.2;
     } else if(p.type==='bombardRook'){
-      p.attackCycles=(p.attackCycles||0)+1;let candidates=game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===p.row&&e.x>p.col);if(p.rank>=4)candidates.sort((a,b)=>game.enemies.filter(e=>enemyFullyVisible(e)&&Math.hypot(e.x-b.x,e.row-b.row)<=1.7).length-game.enemies.filter(e=>enemyFullyVisible(e)&&Math.hypot(e.x-a.x,e.row-a.row)<=1.7).length);else candidates.sort((a,b)=>a.x-b.x);const target=candidates[0];if(target){const radius=p.rank>=2?1.7:1.15,extras=game.enemies.filter(e=>enemyFullyVisible(e)&&e!==target&&Math.hypot(e.x-target.x,e.row-target.row)<=radius).slice(0,p.rank>=2?4:2),victims=[target,...extras],double=p.rank>=5&&p.attackCycles%3===0;damageEnemy(target,Math.round(u.attack*mult),p.type,p);extras.forEach(e=>damageEnemy(e,Math.round(u.attack*mult*.5),p.type,p));if(double)victims.filter(e=>game.enemies.includes(e)).forEach(e=>damageEnemy(e,Math.round(u.attack*mult),p.type,p));if(p.rank>=3&&p.attackCycles%4===0)victims.filter(e=>game.enemies.includes(e)).forEach(e=>e.slowTimer=Math.max(e.slowTimer||0,3));fireProjectile(p.col+.5,p.row+.25,target.x+.5,target.row+.5,'bombardRook',.48);combatVisual('fireVortex',target.x+.5,target.row+.5);p.timer=1.8/attackSpeed;}else p.timer=.2;
+      p.attackCycles=(p.attackCycles||0)+1;let candidates=game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===p.row&&e.x>p.col);if(p.rank>=4)candidates.sort((a,b)=>game.enemies.filter(e=>enemyFullyVisible(e)&&Math.hypot(e.x-b.x,e.row-b.row)<=1.7).length-game.enemies.filter(e=>enemyFullyVisible(e)&&Math.hypot(e.x-a.x,e.row-a.row)<=1.7).length);else candidates.sort((a,b)=>a.x-b.x);const target=candidates[0];if(target){const radius=p.rank>=2?1.7:1.15,amount=Math.round(u.attack*mult),double=p.rank>=5&&p.attackCycles%3===0;fireProjectile(p.col+.5,p.row+.25,target.x+.5,target.row+.5,'bombardRook',.48,{damage:amount,sourceType:p.type,sourceRank:p.rank,attacker:p,effect:'bombard',radius,maxExtras:p.rank>=2?4:2,splash:.5,double,slowSeconds:p.rank>=3&&p.attackCycles%4===0?3:0,allowedRows:[p.row]});p.timer=1.8/attackSpeed;}else p.timer=.2;
     } else if(p.type==='knight'){
       if(p.rank>=4&&p.hp/p.maxHp<.25&&p.traitCooldown<=0){p.col=Math.max(0,p.col-2);healPlayer(p,Math.round(p.maxHp*.35));p.traitCooldown=15;combatVisual('leapTrail',p.col+2.5,p.row+.5,p.col+.5,p.row+.5);p.timer=1;continue;}const leapRange=2.6+Math.min(2,(p.kills||0)*.25),target=game.enemies.filter(e=>enemyFullyVisible(e)&&Math.hypot(e.x-p.col,e.row-p.row)<=leapRange&&(p.rank>=2||e.row===p.row)).sort((a,b)=>a.hp-b.hp)[0];
       if(target){damageEnemy(target,Math.round(u.attack*mult),p.type,p);combatVisual('leapTrail',p.col+.5,p.row+.5,target.x+.5,target.row+.5);combatVisual('hoofStrike',target.x+.5,target.row+.5);p.timer=Math.max(.85,1.35-(p.rank-1)*.07)/attackSpeed;} else p.timer=.2;
@@ -593,27 +588,29 @@ function updatePlayers(dt){
       p.attackCycles=(p.attackCycles||0)+1;const allWounded=game.players.filter(a=>a!==p&&a.hp<a.maxHp).sort((a,b)=>a.hp/a.maxHp-b.hp/b.maxHp),wide=p.rank>=5&&p.attackCycles%3===0,healOne=(ally,amount)=>{const missing=ally.maxHp-ally.hp;healPlayer(ally,amount);if(p.rank>=3&&amount>missing)ally.beanArmor=Math.min(300,(ally.beanArmor||0)+(amount-missing));if(p.rank>=4)ally.timer=Math.max(0,ally.timer-.5);combatVisual('royalBeam',p.col+.5,p.row+.5,ally.col+.5,ally.row+.5);};if(wide)allWounded.forEach(a=>healOne(a,90));else{if(allWounded[0])healOne(allWounded[0],110);if(p.rank>=2&&allWounded[1])healOne(allWounded[1],55);}const targets=game.enemies.filter(e=>enemyFullyVisible(e)&&Math.abs(Math.abs(e.x-p.col)-Math.abs(e.row-p.row))<.85&&Math.abs(e.x-p.col)<6).slice(0,wide?2:1);targets.forEach(e=>{damageEnemy(e,Math.round(u.attack*mult),p.type,p);combatVisual('arcBurst',e.x+.5,e.row+.5);});if(allWounded.length||targets.length)p.timer=1.45/attackSpeed;else p.timer=.2;
     } else if(p.type==='queen'){
       p.attackCycles=(p.attackCycles||0)+1;const rows=p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row),targets=rows.map(r=>nearestLaneTarget(r,p.col,9)).filter(Boolean);
-      if(targets.length){targets.forEach(e=>{const amount=Math.round(rollAttackDamage(u)*mult);damageTarget(e,amount,p.type,p);fireProjectile(p.col+.55,e.row+.5,targetX(e)+.5,e.row+.5,'rook');combatVisual('muzzle',p.col+.72,e.row+.5)});if(p.rank>=4&&rows.length===5)game.players.filter(a=>a!==p&&UNITS[a.type].shape==='rook').forEach(a=>a.timer=Math.max(0,a.timer-.35));p.timer=Math.max(.75,1.2-(p.rank-1)*.06)/attackSpeed;} else p.timer=.2;
-    } else if(['iceQueen','flameQueen','poisonQueen'].includes(p.type)){
+      if(targets.length){targets.forEach(e=>{const amount=Math.round(rollAttackDamage(u)*mult);fireProjectile(p.col+.55,e.row+.5,9.65,e.row+.5,'rook',0,{damage:amount,sourceType:p.type,sourceRank:p.rank,attacker:p,allowedRows:[e.row]});combatVisual('muzzle',p.col+.72,e.row+.5)});if(p.rank>=4&&rows.length===5)game.players.filter(a=>a!==p&&UNITS[a.type].shape==='rook').forEach(a=>a.timer=Math.max(0,a.timer-.35));p.timer=Math.max(.75,1.2-(p.rank-1)*.06)/attackSpeed;} else p.timer=.2;
+    } else if(['iceQueen','flameQueen','poisonQueen','electricQueen'].includes(p.type)){
       fireElementalQueenVolley(p,u,mult,attackSpeed);
     } else if(isSuperQueenType(p.type)){
-      p.attackCycles=(p.attackCycles||0)+1;const rows=p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row);let fired=0;rows.forEach(row=>fired+=fireQuadVolley(p,row,mult));if(fired){if(p.rank>=4&&rows.length===5)game.players.filter(a=>a!==p&&UNITS[a.type].shape==='rook').forEach(a=>a.timer=Math.max(0,a.timer-.5));if(p.rank>=5){game.abilityEvents=game.abilityEvents||[];rows.forEach(row=>game.abilityEvents.push({t:.3,kind:'quadRepeat',sourceId:p.id,row}));}p.timer=1.5/attackSpeed;}else p.timer=.2;
+      p.attackCycles=(p.attackCycles||0)+1;const revisedElement=['ice','electric'].includes(u.element),rows=!revisedElement&&p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row);let fired=0;rows.forEach(row=>fired+=fireQuadVolley(p,row,mult));if(fired){if(p.rank>=4&&rows.length===5)game.players.filter(a=>a!==p&&UNITS[a.type].shape==='rook').forEach(a=>a.timer=Math.max(0,a.timer-.5));if(p.rank>=5&&!revisedElement){game.abilityEvents=game.abilityEvents||[];rows.forEach(row=>game.abilityEvents.push({t:.3,kind:'quadRepeat',sourceId:p.id,row}));}p.timer=Math.max(.9,1.5-(u.element==='electric'&&p.rank>=2?.08:0))/attackSpeed;}else p.timer=.2;
     } else if(p.type==='shadowQueen'){
-      p.attackCycles=(p.attackCycles||0)+1;const rows=p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row),target=game.enemies.filter(e=>enemyFullyVisible(e)&&rows.includes(e.row)&&e.x>p.col).sort((a,b)=>a.hp-b.hp)[0];if(target){const third=(target.shadowMarks||0)>=2;damageEnemy(target,Math.round(u.attack*mult),p.type,p);if(game.enemies.includes(target)){target.shadowMarks=(target.shadowMarks||0)+1;if(p.rank>=2)target.vulnerableTimer=Math.max(target.vulnerableTimer||0,2);if(third){target.shadowMarks=0;damageStatusEnemy(target,Math.round(260*mult),p.type,'shadow');if(p.rank>=4){const next=game.enemies.filter(e=>e!==target&&Math.hypot(e.x-target.x,e.row-target.row)<=2).sort((a,b)=>a.hp-b.hp)[0];if(next)next.shadowMarks=(next.shadowMarks||0)+1;}if(p.rank>=5&&game.enemies.includes(target)&&target.hp/target.maxHp<.2)damageStatusEnemy(target,350,p.type,'shadow');}}fireProjectile(p.col+.55,p.row+.5,target.x+.5,target.row+.5,'shadowQueen',.3);combatVisual('prismLane',p.col+.5,p.row+.5,target.x+.5,target.row+.5);p.timer=1.25/attackSpeed;}else p.timer=.2;
+      p.attackCycles=(p.attackCycles||0)+1;const rows=p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row),target=game.enemies.filter(e=>enemyFullyVisible(e)&&rows.includes(e.row)&&e.x>p.col).sort((a,b)=>a.hp-b.hp)[0];if(target){fireProjectile(p.col+.55,p.row+.5,target.x+.5,target.row+.5,'shadowQueen',.3,{damage:Math.round(u.attack*mult),sourceType:p.type,sourceRank:p.rank,attacker:p,effect:'shadowQueen',mult});combatVisual('prismLane',p.col+.5,p.row+.5,target.x+.5,target.row+.5);p.timer=1.25/attackSpeed;}else p.timer=.2;
     } else if(p.type==='twinQueen'){
-      p.attackCycles=(p.attackCycles||0)+1;let rows=adjacentRows(p.row);if(p.rank>=3&&p.attackCycles%4===0)rows=[0,1,2,3,4];let fired=0;const lone=p.rank>=5&&new Set(game.players.filter(a=>UNITS[a.type].attack>0).map(a=>a.type)).size===1;rows.forEach(row=>{const targets=visibleFlatTargets(row,p.col,9),copies=lone?2:1;for(let copy=0;copy<copies;copy++){const first=targets[copy*2]||targets[0],second=p.rank>=2?(targets[copy*2+1]||first):first;if(!first)continue;const amount=Math.round(u.attack*mult);damageTarget(first,amount,p.type,p);if(second&&(second.isHazard?game.hazards.includes(second):game.enemies.includes(second)))damageTarget(second,amount,p.type,p);firePairedProjectiles(p.col+.5-copy*.5,row+.5,first,second);fired+=2;}});if(fired){combatVisual('doubleMuzzle',p.col+.72,p.row+.5);p.timer=Math.max(.78,1.3-(p.rank-1)*.06)/attackSpeed;}else p.timer=.2;
+      p.attackCycles=(p.attackCycles||0)+1;let rows=adjacentRows(p.row);if(p.rank>=3&&p.attackCycles%4===0)rows=[0,1,2,3,4];let fired=0;const lone=p.rank>=5&&new Set(game.players.filter(a=>UNITS[a.type].attack>0).map(a=>a.type)).size===1;rows.forEach(row=>{const targets=visibleFlatTargets(row,p.col,9),copies=lone?2:1;for(let copy=0;copy<copies;copy++){const first=targets[copy*2]||targets[0],second=p.rank>=2?(targets[copy*2+1]||first):first;if(!first)continue;const amount=Math.round(u.attack*mult),hit={damage:amount,sourceType:p.type,sourceRank:p.rank,attacker:p,allowedRows:[row]};firePairedProjectiles(p.col+.5-copy*.5,row+.5,first,second,'twinRook',hit,{...hit});fired+=2;}});if(fired){combatVisual('doubleMuzzle',p.col+.72,p.row+.5);p.timer=Math.max(.78,1.3-(p.rank-1)*.06)/attackSpeed;}else p.timer=.2;
     } else if(p.type==='twinRook'){
-      let targets=visibleFlatTargets(p.row,p.col,7);if(!targets.length&&p.rank>=4){const supportRows=[p.row-1,p.row+1].filter(row=>row>=0&&row<5).sort((a,b)=>game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===b).length-game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===a).length);targets=visibleFlatTargets(supportRows[0],p.col,7);}const target=targets[0];if(target){const second=p.rank>=2?(targets[1]||target):target,amount=Math.round(u.attack*mult);damageTarget(target,amount,p.type,p);if(second&&(second.isHazard?game.hazards.includes(second):game.enemies.includes(second)))damageTarget(second,amount,p.type,p);p.combo=(p.lastTargetId===target.id?(p.combo||0)+2:2);p.lastTargetId=target.id;firePairedProjectiles(p.col+.5,p.row+.5,target,second);combatVisual('doubleMuzzle',p.col+.7,p.row+.5);const frenzy=p.rank>=5&&p.combo>=10;p.timer=Math.max(.42,(1.25-(p.rank-1)*.06)*(frenzy?.5:1))/attackSpeed;if(frenzy)floatText(p.col+.5,p.row+.08,'极速鼓点','#ffe07c');}else p.timer=.2;
+      let targets=visibleFlatTargets(p.row,p.col,7);if(!targets.length&&p.rank>=4){const supportRows=[p.row-1,p.row+1].filter(row=>row>=0&&row<5).sort((a,b)=>game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===b).length-game.enemies.filter(e=>enemyFullyVisible(e)&&e.row===a).length);targets=visibleFlatTargets(supportRows[0],p.col,7);}const target=targets[0];if(target){const second=p.rank>=2?(targets[1]||target):target,amount=Math.round(u.attack*mult),hit={damage:amount,sourceType:p.type,sourceRank:p.rank,attacker:p};p.combo=(p.lastTargetId===target.id?(p.combo||0)+2:2);p.lastTargetId=target.id;firePairedProjectiles(p.col+.5,p.row+.5,target,second,'twinRook',hit,{...hit});combatVisual('doubleMuzzle',p.col+.7,p.row+.5);const frenzy=p.rank>=5&&p.combo>=10;p.timer=Math.max(.42,(1.25-(p.rank-1)*.06)*(frenzy?.5:1))/attackSpeed;if(frenzy)floatText(p.col+.5,p.row+.08,'极速鼓点','#ffe07c');}else p.timer=.2;
     } else if(isSuperRookType(p.type)){
-      p.attackCycles=(p.attackCycles||0)+1;const fired=fireQuadVolley(p,p.row,mult);if(fired){game.abilityEvents=game.abilityEvents||[];if(p.rank>=3&&p.attackCycles%2===0)game.abilityEvents.push({t:.15,kind:'quadRepeat',sourceId:p.id,row:p.row});if(p.rank>=5)game.abilityEvents.push({t:.3,kind:'quadRepeat',sourceId:p.id,row:p.row});p.timer=1.5/attackSpeed;}else p.timer=.2;
+      p.attackCycles=(p.attackCycles||0)+1;const fired=fireQuadVolley(p,p.row,mult);if(fired){game.abilityEvents=game.abilityEvents||[];const revisedElement=['ice','electric'].includes(u.element);if(!revisedElement&&p.rank>=3&&p.attackCycles%2===0)game.abilityEvents.push({t:.15,kind:'quadRepeat',sourceId:p.id,row:p.row});if(!revisedElement&&p.rank>=5)game.abilityEvents.push({t:.3,kind:'quadRepeat',sourceId:p.id,row:p.row});p.timer=Math.max(.9,1.5-(u.element==='electric'&&p.rank>=2?.08:0))/attackSpeed;}else p.timer=.2;
     } else if(p.type==='iceRook'){
-      const target=nearestLaneTarget(p.row,p.col,7);if(target){const hit=damageTarget(target,Math.round(u.attack*mult),p.type,p);if(hit&&!target.isHazard){target.slowTimer=Math.max(target.slowTimer,3.5+(p.rank-1)*.3);if(p.rank>=3){target.iceHits=(target.iceHits||0)+1;if(target.iceHits%3===0){target.frozenTimer=1.5;recordUnlockProgress('iceSculptures');floatText(target.x+.5,target.row+.1,'冰雕','#b8f4ff');}}if(p.rank>=4&&target.frozenTimer>0)target.x=Math.min(9.2,target.x+.6);}if(p.rank>=2){const ice=game.hazards.filter(h=>h.type==='ice'&&h.row===p.row&&h.col>p.col).sort((a,b)=>a.col-b.col)[0];if(ice){game.hazards=game.hazards.filter(h=>h!==ice);floatText(ice.col+.5,ice.row+.1,'冰面净化','#c8f7ff');}}fireProjectile(p.col+.5,p.row+.5,targetX(target)+.5,target.row+.5,'iceRook',.27);combatVisual('iceMuzzle',p.col+.72,p.row+.5);if(hit)pulseAt(targetX(target)+.5,target.row+.5,'freeze');p.timer=Math.max(.8,1.25-(p.rank-1)*.06)/attackSpeed;}else p.timer=.2;
+      const target=nearestLaneTarget(p.row,p.col,7);if(target){const shot=iceShotProfile(p.rank);fireProjectile(p.col+.5,p.row+.5,targetX(target)+.5,target.row+.5,shot.kind,.27,{damage:Math.round(u.attack*mult),sourceType:p.type,sourceRank:p.rank,attacker:p,effect:'iceRook',iceShard:shot.shard,allowedRows:[p.row]});combatVisual('iceMuzzle',p.col+.72,p.row+.5);p.timer=Math.max(.8,1.25-(p.rank-1)*.06)/attackSpeed;}else p.timer=.2;
     } else if(p.type==='flameRook'){
-      const target=nearestLaneTarget(p.row,p.col,7);if(target){const hit=damageTarget(target,Math.round(u.attack*mult),p.type,p);if(hit&&!target.isHazard){target.burnTimer=3;target.burnDps=Math.round(u.burnDps*mult);target.burnSource=p.type;if(p.rank>=2)target.litTimer=3;}if(p.rank>=3){const before=game.hazards.length;game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&h.row===p.row&&h.col>p.col&&h.col<=targetX(target)));const melted=before-game.hazards.length;if(melted){recordUnlockProgress('meltedIce',melted);floatText(targetX(target)+.5,p.row+.1,'熔冰','#ffb06d');}}fireProjectile(p.col+.5,p.row+.5,targetX(target)+.5,target.row+.5,'flameRook',.25);combatVisual('fireMuzzle',p.col+.72,p.row+.5);if(hit)pulseAt(targetX(target)+.5,target.row+.5,'burn');p.timer=Math.max(.75,1.2-(p.rank-1)*.06)/attackSpeed;}else p.timer=.2;
+      p.attackCycles=(p.attackCycles||0)+1;const lane=visibleFlatTargets(p.row,p.col,7),target=p.rank>=4?[...lane].filter(e=>!e.isHazard).sort((a,b)=>b.hp-a.hp)[0]||lane[0]:lane[0];if(target){if(p.rank>=3){const before=game.hazards.length;game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&h.row===p.row&&h.col>p.col&&h.col<=targetX(target)));const melted=before-game.hazards.length;if(melted){recordUnlockProgress('meltedIce',melted);floatText(targetX(target)+.5,p.row+.1,'熔冰','#ffb06d');}}const amount=Math.round(rollAttackDamage(UNITS.rook)*1.5*mult),hit={damage:amount,sourceType:p.type,sourceRank:p.rank,attacker:p,effect:'flameRook',allowedRows:[p.row]};fireProjectile(p.col+.5,p.row+.5,targetX(target)+.5,target.row+.5,'flameRook',.25,hit);if(p.rank>=5&&p.attackCycles%5===0)fireProjectile(p.col-.05,p.row+.5,targetX(target)-.1,target.row+.5,'flameRook',.28,{...hit});combatVisual('fireMuzzle',p.col+.72,p.row+.5);p.timer=Math.max(.7,1.2-(p.rank-1)*.06-(p.rank>=2?.08:0))/attackSpeed;}else p.timer=.2;
     } else if(p.type==='poisonRook'){
-      const visible=visibleFlatTargets(p.row,p.col,7),target=p.rank>=2?(visible.find(e=>!e.isHazard&&(e.poisonTimer||0)<=0)||visible[0]):visible[0];if(target){const hit=damageTarget(target,Math.round(u.attack*mult),p.type,p);if(hit&&!target.isHazard){target.poisonTimer=8;target.poisonDps=Math.round(u.poisonDps*mult);target.poisonSource=p.type;}fireProjectile(p.col+.5,p.row+.5,targetX(target)+.5,target.row+.5,'poisonRook',.3);combatVisual('toxicMuzzle',p.col+.72,p.row+.5);if(hit)pulseAt(targetX(target)+.5,target.row+.5,'poison');p.timer=Math.max(.85,1.3-(p.rank-1)*.06)/attackSpeed;}else p.timer=.2;
+      const target=visibleFlatTargets(p.row,p.col,7)[0];if(target){fireProjectile(p.col+.5,p.row+.5,targetX(target)+.5,target.row+.5,'poisonRook',.3,{damage:Math.round(u.attack*mult),sourceType:p.type,sourceRank:p.rank,attacker:p,effect:'poisonRook',poisonSeconds:8,poisonDps:Math.round(u.poisonDps*mult),allowedRows:[p.row]});combatVisual('toxicMuzzle',p.col+.72,p.row+.5);p.timer=Math.max(.85,1.3-(p.rank-1)*.06)/attackSpeed;}else p.timer=.2;
+    } else if(p.type==='electricRook'){
+      const target=visibleFlatTargets(p.row,p.col,9)[0];if(target){fireProjectile(p.col+.5,p.row+.5,9.65,p.row+.5,'electricRook',.38,{damage:Math.round(u.attack*mult),sourceType:p.type,sourceRank:p.rank,attacker:p,effect:'elemental',pierce:true,allowedRows:[p.row]});combatVisual('electricMuzzle',p.col+.72,p.row+.5);p.timer=Math.max(.65,1.3-(p.rank-1)*.06-(p.rank>=2?.08:0))/attackSpeed;}else p.timer=.2;
     } else if(['iceBishop','flameBishop','poisonBishop'].includes(p.type)){
-      let targets=game.enemies.filter(e=>enemyFullyVisible(e)&&Math.abs(Math.abs(e.x-p.col)-Math.abs(e.row-p.row))<.85&&Math.abs(e.x-p.col)<6);if(p.type==='poisonBishop'&&p.rank>=2)targets.sort((a,b)=>((a.poisonTimer||0)>0)-((b.poisonTimer||0)>0)||b.hp-a.hp);const target=targets[0];if(target){const wasCold=(target.slowTimer||0)>0||(target.frozenTimer||0)>0;damageEnemy(target,Math.round(u.attack*mult),p.type,p);if(game.enemies.includes(target)&&p.type==='iceBishop'){target.slowTimer=Math.max(target.slowTimer||0,3.5);target.iceBishopHits=(target.iceBishopHits||0)+1;if(target.iceBishopHits%3===0){target.frozenTimer=2;floatText(target.x+.5,target.row+.1,'斜线冰封','#b8f4ff');}if(p.rank>=4&&target.type==='jester'&&target.frozenTimer>0){target.reflectActive=0;target.reflectTimer=6;}}if(game.enemies.includes(target)&&p.type==='flameBishop'){target.burnTimer=3;target.burnDps=Math.round(u.burnDps*mult);target.burnSource=p.type;if(p.rank>=3&&wasCold)damageStatusEnemy(target,160,p.type,'burn');if(target.type==='elephant'&&p.rank>=4)target.summonTimer=Math.max(target.summonTimer,8);const before=game.hazards.length;game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&Math.abs(Math.abs(h.col-p.col)-Math.abs(h.row-p.row))<.75));const melted=before-game.hazards.length;if(melted)recordUnlockProgress('meltedIce',melted);}if(game.enemies.includes(target)&&p.type==='poisonBishop'){target.poisonTimer=8;target.poisonDps=Math.round(u.poisonDps*mult);target.poisonSource=p.type;if(p.rank>=4)target.noRegenTimer=8;}fireProjectile(p.col+.5,p.row+.5,target.x+.5,target.row+.5,p.type,.34);combatVisual('arcBurst',target.x+.5,target.row+.5);const infected=p.type==='poisonBishop'?game.enemies.filter(e=>(e.poisonTimer||0)>0).length:0;p.timer=Math.max(.72,1.28-(p.rank-1)*.06)/(attackSpeed*(p.rank>=5?1+Math.min(.4,infected*.04):1));}else p.timer=.2;
+      let targets=game.enemies.filter(e=>enemyFullyVisible(e)&&Math.abs(Math.abs(e.x-p.col)-Math.abs(e.row-p.row))<.85&&Math.abs(e.x-p.col)<6);if(p.type==='poisonBishop'&&p.rank>=2)targets.sort((a,b)=>((a.poisonTimer||0)>0)-((b.poisonTimer||0)>0)||b.hp-a.hp);const target=targets[0];if(target){const wasCold=(target.slowTimer||0)>0||(target.frozenTimer||0)>0,iceShot=p.type==='iceBishop'?iceShotProfile(p.rank):null;damageEnemy(target,Math.round(u.attack*mult),p.type,p);if(game.enemies.includes(target)&&p.type==='iceBishop')applyIceControl(target,p.rank,p.type,iceShot.shard);if(game.enemies.includes(target)&&p.type==='flameBishop'){target.burnTimer=3;target.burnDps=Math.round(u.burnDps*mult);target.burnSource=p.type;if(p.rank>=3&&wasCold)damageStatusEnemy(target,160,p.type,'burn');if(target.type==='elephant'&&p.rank>=4)target.summonTimer=Math.max(target.summonTimer,8);const before=game.hazards.length;game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&Math.abs(Math.abs(h.col-p.col)-Math.abs(h.row-p.row))<.75));const melted=before-game.hazards.length;if(melted)recordUnlockProgress('meltedIce',melted);}if(game.enemies.includes(target)&&p.type==='poisonBishop'){applyPoisonStatus(target,{duration:8,dps:Math.round(u.poisonDps*mult),sourceType:p.type});if(p.rank>=4)target.noRegenTimer=8;}fireProjectile(p.col+.5,p.row+.5,target.x+.5,target.row+.5,iceShot?.kind||p.type,.34);combatVisual('arcBurst',target.x+.5,target.row+.5);const infected=p.type==='poisonBishop'?game.enemies.filter(e=>(e.poisonTimer||0)>0).length:0;p.timer=Math.max(.72,1.28-(p.rank-1)*.06)/(attackSpeed*(p.rank>=5?1+Math.min(.4,infected*.04):1));}else p.timer=.2;
     } else if(p.type==='stormKnight'){
       const target=game.enemies.filter(e=>enemyFullyVisible(e)&&Math.hypot(e.x-p.col,e.row-p.row)<=3.2).sort((a,b)=>a.hp-b.hp)[0];
       if(target){damageEnemy(target,Math.round(u.attack*mult),p.type,p);combatVisual('lightningLink',p.col+.5,p.row+.5,target.x+.5,target.row+.5);game.enemies.filter(e=>enemyFullyVisible(e)&&e!==target&&Math.hypot(e.x-target.x,e.row-target.row)<=1.8).slice(0,p.rank>=2?3:2).forEach(e=>{damageEnemy(e,Math.round(u.chainDamage*mult),p.type,p);combatVisual('lightningLink',target.x+.5,target.row+.5,e.x+.5,e.row+.5);});pulseAt(target.x+.5,target.row+.5,'storm');p.timer=Math.max(.95,1.5-(p.rank-1)*.07)/attackSpeed;}else p.timer=.2;
@@ -625,6 +622,7 @@ function updatePlayers(dt){
   }
 }
 function enemyHalfWidth(e){const data=ENEMIES[e?.type]||{};return data.giant?.7:data.boss?.59:data.large?.525:.39;}
+function enemyHalfHeight(e){const data=ENEMIES[e?.type]||{};return data.boss?.62:data.giant?.56:data.large?.48:.38;}
 function stagingXForEnemy(type){return BOARD_RULES.cols-.5+enemyHalfWidth({type})+.02;}
 function enemyDamageable(e){
   if(!Number.isFinite(e?.x))return true;const center=e.x+.5,halfWidth=enemyHalfWidth(e);return center-halfWidth<BOARD_RULES.cols+BOARD_RULES.prep&&center+halfWidth>-BOARD_RULES.prep;
@@ -645,39 +643,48 @@ function damageTarget(target,amount,source,attacker){return target.isHazard?dama
 function targetStillPresent(target){return !!target&&(target.isHazard?game.hazards.includes(target):game.enemies.includes(target));}
 function isSuperRookType(type){return type==='superRook'||UNITS[type]?.fusionBase==='superRook';}
 function isSuperQueenType(type){return type==='superQueen'||UNITS[type]?.fusionBase==='superQueen';}
-function applyElementalHit(target,attacker,mult=1){
+function applyPoisonStatus(target,{duration=8,dps=0,sourceType,stack=false}={}){
+  if(!target||target.isHazard||!game.enemies.includes(target))return;const active=(target.poisonTimer||0)>0;
+  if(stack){
+    const continuing=active&&target.poisonStacking&&target.poisonSource===sourceType;target.poisonStacks=continuing?Math.max(1,target.poisonStacks||1)+1:1;target.poisonBaseDps=dps;target.poisonDps=dps*target.poisonStacks;target.poisonSource=sourceType;target.poisonStacking=true;
+    if(target.poisonStacks>1)floatText(target.x+.5,target.row+.08,`毒 ×${target.poisonStacks}`,'#cf91ff');
+  }else if(!active||(!target.poisonStacking&&(target.poisonDps||0)<=dps)){
+    target.poisonStacks=1;target.poisonBaseDps=dps;target.poisonDps=dps;target.poisonSource=sourceType;target.poisonStacking=false;
+  }
+  target.poisonTimer=Math.max(target.poisonTimer||0,duration);
+}
+function applyIceControl(target,rank=1,sourceType='iceRook',iceShard=false){
+  if(!target||target.isHazard||!game.enemies.includes(target))return;const slowSeconds=ICE_SHARD_RULES.slowSeconds+(rank>=2?ICE_SHARD_RULES.rank2Bonus:0);target.slowTimer=Math.max(target.slowTimer||0,slowSeconds);if(!iceShard)return;
+  const freezeSeconds=ICE_SHARD_RULES.freezeSeconds+(rank>=2?ICE_SHARD_RULES.rank2Bonus:0),cellFreeze=rank>=5&&Math.random()<ICE_SHARD_RULES.cellFreezeChance,cell=Math.floor(target.x),targets=cellFreeze?game.enemies.filter(e=>enemyDamageable(e)&&e.row===target.row&&Math.floor(e.x)===cell):[target];targets.forEach(e=>{e.frozenTimer=Math.max(e.frozenTimer||0,freezeSeconds);e.slowTimer=Math.max(e.slowTimer||0,slowSeconds);pulseAt(e.x+.5,e.row+.5,'freeze');});floatText(target.x+.5,target.row+.08,cellFreeze?'整格冰封':'大冰棱','#c9f7ff');if(sourceType==='iceRook')recordUnlockProgress('iceSculptures');
+}
+function applyElementalHit(target,attacker,mult=1,iceShard=false){
   if(!target||target.isHazard||!game.enemies.includes(target))return;const u=UNITS[attacker.type],rank=attacker.rank||1;
   if(u.element==='ice'){
-    target.slowTimer=Math.max(target.slowTimer||0,3.5+(rank-1)*.25);if(rank>=2){target.royalIceHits=(target.royalIceHits||0)+1;if(target.royalIceHits%3===0){target.frozenTimer=Math.max(target.frozenTimer||0,rank>=4?2.2:1.5);if(rank>=4)target.x=Math.min(stagingXForEnemy(target.type),target.x+.4);}}
-    if(rank>=5&&target.frozenTimer>0)damageStatusEnemy(target,Math.round(u.attack*mult),attacker.type,'freeze');
-  }else if(u.element==='flame'){
-    target.burnTimer=Math.max(target.burnTimer||0,3);target.burnDps=Math.round((u.burnDps||35)*mult);target.burnSource=attacker.type;if(rank>=2)target.litTimer=Math.max(target.litTimer||0,3);
+    applyIceControl(target,rank,attacker.type,iceShard);
   }else if(u.element==='poison'){
-    target.poisonTimer=Math.max(target.poisonTimer||0,8);target.poisonDps=Math.round((u.poisonDps||25)*mult);target.poisonSource=attacker.type;if(rank>=4)target.noRegenTimer=Math.max(target.noRegenTimer||0,8);
+    applyPoisonStatus(target,{duration:8,dps:Math.round((u.poisonDps||25)*mult),sourceType:attacker.type});if(rank>=4)target.noRegenTimer=Math.max(target.noRegenTimer||0,8);
   }
 }
 function fireQuadVolley(p,row,mult){
-  const initial=visibleFlatTargets(row,p.col,9);if(!initial.length)return 0;const shield=initial.find(target=>target.isHazard)||null,u=UNITS[p.type],projectile=u.projectile||'rook';
+  const initial=visibleFlatTargets(row,p.col,9);if(!initial.length)return 0;const u=UNITS[p.type];
   for(let i=0;i<4;i++){
-    const live=visibleFlatTargets(row,p.col,9),preferred=p.rank>=2?initial[i]:initial[0],target=targetStillPresent(shield)?shield:targetStillPresent(preferred)?preferred:live[0],gap=(i-1.5)*.36,tx=target?targetX(target)+.5+gap:9.5+gap;
-    fireProjectile(p.col+.55+gap,row+.5,tx,row+.5,projectile,.3);if(target){damageTarget(target,Math.round((u.element?u.attack:rollAttackDamage(UNITS.rook))*mult),p.type,p);applyElementalHit(target,p,mult);}
+    const gap=(i-1.5)*.36,shot=u.element==='ice'?iceShotProfile(p.rank):{kind:u.projectile||'rook',shard:false},base=u.element==='flame'?rollAttackDamage(UNITS.rook)*1.5:u.element?u.attack:rollAttackDamage(UNITS.rook),amount=Math.round(base*mult);fireProjectile(p.col+.55+gap,row+.5,9.65+gap,row+.5,shot.kind,.3,{damage:amount,sourceType:p.type,sourceRank:p.rank,attacker:p,effect:u.element?'elemental':null,mult,iceShard:shot.shard,pierce:u.element==='electric',allowedRows:[row]});
   }
   if(u.element==='flame'&&p.rank>=4)game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&h.row===row&&h.col>p.col));
   combatVisual('doubleMuzzle',p.col+.72,row+.5);return 4;
 }
 
 function fireElementalQueenVolley(p,u,mult,attackSpeed){
-  p.attackCycles=(p.attackCycles||0)+1;const rows=p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row);let fired=0;
-  rows.forEach(row=>{const lane=visibleFlatTargets(row,p.col,9),target=u.element==='poison'&&p.rank>=2?(lane.find(e=>!e.isHazard&&(e.poisonTimer||0)<=0)||lane[0]):lane[0];if(!target)return;damageTarget(target,Math.round(u.attack*mult),p.type,p);applyElementalHit(target,p,mult);fireProjectile(p.col+.55,row+.5,targetX(target)+.5,row+.5,u.projectile,.3);combatVisual(u.element==='ice'?'iceMuzzle':u.element==='flame'?'fireMuzzle':'toxicMuzzle',p.col+.72,row+.5);fired++;});
+  p.attackCycles=(p.attackCycles||0)+1;const rows=['flame','poison'].includes(u.element)&&p.rank>=3&&p.attackCycles%3===0?[0,1,2,3,4]:adjacentRows(p.row);let fired=0;
+  rows.forEach(row=>{const lane=visibleFlatTargets(row,p.col,9),target=u.element==='poison'&&p.rank>=2?(lane.find(e=>!e.isHazard&&(e.poisonTimer||0)<=0)||lane[0]):lane[0];if(!target)return;const shot=u.element==='ice'?iceShotProfile(p.rank):{kind:u.projectile,shard:false},base=u.element==='flame'?rollAttackDamage(UNITS.rook)*1.5:u.attack,hit={damage:Math.round(base*mult),sourceType:p.type,sourceRank:p.rank,attacker:p,effect:'elemental',mult,iceShard:shot.shard,pierce:u.element==='electric',allowedRows:[row]};fireProjectile(p.col+.55,row+.5,9.65,row+.5,shot.kind,.3,hit);if(u.element==='flame'&&p.rank>=5&&p.attackCycles%5===0)fireProjectile(p.col-.05,row+.5,9.05,row+.5,shot.kind,.34,{...hit});combatVisual(projectileMuzzle(u.element),p.col+.72,row+.5);fired++;});
   if(u.element==='flame'&&p.rank>=4)game.hazards=game.hazards.filter(h=>!(h.type==='ice'&&rows.includes(h.row)&&h.col>p.col));
-  if(u.element==='flame'&&p.rank>=5&&p.attackCycles%5===0)game.enemies.filter(e=>(e.burnTimer||0)>0).forEach(e=>damageStatusEnemy(e,Math.round(u.attack*mult),p.type,'burn'));
-  const infected=u.element==='poison'&&p.rank>=5?game.enemies.filter(e=>(e.poisonTimer||0)>0).length:0;if(fired)p.timer=Math.max(.68,(u.element==='ice'?1.3:u.element==='flame'?1.25:1.35)/(attackSpeed*(1+Math.min(.4,infected*.04))));else p.timer=.2;return fired;
+  const infected=u.element==='poison'&&p.rank>=5?game.enemies.filter(e=>(e.poisonTimer||0)>0).length:0,elementBonus=(u.element==='electric'||u.element==='flame')&&p.rank>=2?.08:0;if(fired)p.timer=Math.max(.68,(u.element==='ice'?1.3:u.element==='flame'?1.25:1.35)-elementBonus)/(attackSpeed*(1+Math.min(.4,infected*.04)));else p.timer=.2;return fired;
 }
 
 function updateEnemies(dt){
   for(const e of [...game.enemies]){
     const data=ENEMIES[e.type],difficulty=game.config.difficultyData||DIFFICULTIES.standard;e.attackTimer-=dt;e.slowTimer=Math.max(0,(e.slowTimer||0)-dt);e.frozenTimer=Math.max(0,(e.frozenTimer||0)-dt);e.litTimer=Math.max(0,(e.litTimer||0)-dt);
-    e.burnTimer=Math.max(0,(e.burnTimer||0)-dt);e.poisonTimer=Math.max(0,(e.poisonTimer||0)-dt);e.vulnerableTimer=Math.max(0,(e.vulnerableTimer||0)-dt);e.statusTick=(e.statusTick||0)+dt;
+    e.burnTimer=Math.max(0,(e.burnTimer||0)-dt);const hadPoison=(e.poisonTimer||0)>0;e.poisonTimer=Math.max(0,(e.poisonTimer||0)-dt);if(hadPoison&&e.poisonTimer<=0){e.poisonStacks=0;e.poisonBaseDps=0;e.poisonDps=0;e.poisonSource=null;e.poisonStacking=false;}e.vulnerableTimer=Math.max(0,(e.vulnerableTimer||0)-dt);e.statusTick=(e.statusTick||0)+dt;
     if(e.statusTick>=1){e.statusTick-=1;if(e.burnTimer>0)damageStatusEnemy(e,e.burnDps,e.burnSource,'burn');if(!game.enemies.includes(e))continue;if(e.poisonTimer>0)damageStatusEnemy(e,e.poisonDps,e.poisonSource,'poison');if(!game.enemies.includes(e))continue;}
     if(data.reflector){e.reflectTimer-=dt;e.reflectActive=Math.max(0,(e.reflectActive||0)-dt);if(e.reflectTimer<=0){e.reflectActive=1.5;e.reflectTimer=5;pulseAt(e.x+.5,e.row+.5,'mirror');floatText(e.x+.5,e.row+.2,'镜幕!','#efb6ff');}}
     if(data.iceTrail){const trailCol=clamp(Math.floor(e.x),0,8);if(trailCol!==e.lastTrailCol){addIceHazard(e.row,trailCol);e.lastTrailCol=trailCol;}}
@@ -687,7 +694,7 @@ function updateEnemies(dt){
     }
     if(data.summoner){
       e.summonTimer-=dt;
-      if(e.summonTimer<=0){ const summoned=spawnEnemy(['soldier','cannon','horse'][Math.floor(Math.random()*3)],Math.floor(Math.random()*5),.75);summoned.x=Math.min(stagingXForEnemy(summoned.type),e.x+.8);const plagueBishop=game.players.find(p=>p.type==='poisonBishop'&&p.rank>=3),carrier=game.enemies.find(x=>x!==summoned&&(x.poisonTimer||0)>0&&Math.hypot(x.x-e.x,x.row-e.row)<2);if(plagueBishop&&carrier){summoned.poisonTimer=6;summoned.poisonDps=UNITS.poisonBishop.poisonDps;summoned.poisonSource='poisonBishop';floatText(summoned.x+.5,summoned.row+.1,'援军染毒','#a9e87a');}e.summonTimer=10;pulseAt(e.x+.5,e.row+.5,'bagua');toast('八卦相召来了一枚援军'); }
+      if(e.summonTimer<=0){ const summoned=spawnEnemy(['soldier','cannon','horse'][Math.floor(Math.random()*3)],Math.floor(Math.random()*5),.75);summoned.x=Math.min(stagingXForEnemy(summoned.type),e.x+.8);const plagueBishop=game.players.find(p=>p.type==='poisonBishop'&&p.rank>=3),carrier=game.enemies.find(x=>x!==summoned&&(x.poisonTimer||0)>0&&Math.hypot(x.x-e.x,x.row-e.row)<2);if(plagueBishop&&carrier){applyPoisonStatus(summoned,{duration:6,dps:UNITS.poisonBishop.poisonDps,sourceType:'poisonBishop'});floatText(summoned.x+.5,summoned.row+.1,'援军染毒','#cf91ff');}e.summonTimer=10;pulseAt(e.x+.5,e.row+.5,'bagua');toast('八卦相召来了一枚援军'); }
     }
     if(data.boss){
       e.noHitTime+=dt;e.regenTick+=dt;e.noRegenTimer=Math.max(0,(e.noRegenTimer||0)-dt);
@@ -775,8 +782,8 @@ function triggerPlayerDeathTrait(p){
   const rank=p.rank||save.ranks[p.type]||1;if(rank<5||p.deathTraitFired)return;p.deathTraitFired=true;
   // 五阶不再默认绑定阵亡效果；成长质变在存活时持续生效。
 }
-function damageStatusEnemy(e,amount,source,kind){if(!amount||!source||!enemyDamageable(e))return false;amount*=game.config.buffData?.damage||1;e.hp-=amount;if(ENEMIES[e.type]?.boss){e.noHitTime=0;e.regenTick=0;}floatText(e.x+.5,e.row+.18,`-${Math.round(amount)}`,kind==='burn'?'#ff9d55':'#a8e66f');pulseAt(e.x+.5,e.row+.5,kind);if(e.hp<=0)defeatEnemy(e,source);return true;}
-function defeatEnemy(e,source){const data=ENEMIES[e.type],killer=game.players.find(p=>p.type===source);fallenEnemy(e);if(killer){killer.kills=(killer.kills||0)+1;if(killer.type==='pawn'&&killer.rank>=3&&killer.kills===3){killer.promoted=true;floatText(killer.col+.5,killer.row+.1,'过河升变!','#ffe088');}if(killer.type==='pawn'&&killer.rank>=5&&killer.promoted){game.energy+=15;game.energyCollected+=15;killer.timer=0;}if(killer.type==='berserkerPawn'&&killer.rank>=4){killer.rageTimer=3;floatText(killer.col+.5,killer.row+.1,'斩敌暴怒!','#ff7767');}if(UNITS[killer.type]?.element==='flame'&&killer.rank>=4&&e.burnTimer>0){const next=game.enemies.filter(x=>enemyFullyVisible(x)&&x!==e&&x.row===e.row&&x.burnTimer<=0).sort((a,b)=>a.x-b.x)[0];if(next){next.burnTimer=3;next.burnDps=e.burnDps;next.burnSource=source;floatText(next.x+.5,next.row+.1,'火种接力','#ff9b55');}}if(UNITS[killer.type]?.element==='poison'&&killer.rank>=5&&e.poisonTimer>0){const col=clamp(Math.floor(e.x),0,8);if(!game.players.some(p=>p.row===e.row&&p.col===col))game.players.push({id:++game.entityId,type:'shieldPawn',spore:true,row:e.row,col,hp:300,maxHp:300,timer:99,rank:1,expire:3});}}
+function damageStatusEnemy(e,amount,source,kind){if(!amount||!source||!enemyDamageable(e))return false;amount*=game.config.buffData?.damage||1;e.hp-=amount;if(ENEMIES[e.type]?.boss){e.noHitTime=0;e.regenTick=0;}floatText(e.x+.5,e.row+.18,`-${Math.round(amount)}`,kind==='burn'?'#ff9d55':kind==='poison'?'#cf91ff':'#a8e66f');pulseAt(e.x+.5,e.row+.5,kind);if(e.hp<=0)defeatEnemy(e,source);return true;}
+function defeatEnemy(e,source){const data=ENEMIES[e.type],killer=game.players.find(p=>p.type===source);fallenEnemy(e);if(killer){killer.kills=(killer.kills||0)+1;if(killer.type==='pawn'&&killer.rank>=3&&killer.kills===3){killer.promoted=true;floatText(killer.col+.5,killer.row+.1,'过河升变!','#ffe088');}if(killer.type==='pawn'&&killer.rank>=5&&killer.promoted){game.energy+=15;game.energyCollected+=15;killer.timer=0;}if(killer.type==='berserkerPawn'&&killer.rank>=4){killer.rageTimer=3;floatText(killer.col+.5,killer.row+.1,'斩敌暴怒!','#ff7767');}if(UNITS[killer.type]?.element==='poison'&&killer.rank>=5&&e.poisonTimer>0){const col=clamp(Math.floor(e.x),0,8);if(!game.players.some(p=>p.row===e.row&&p.col===col))game.players.push({id:++game.entityId,type:'shieldPawn',spore:true,row:e.row,col,hp:300,maxHp:300,timer:99,rank:1,expire:3});}}
   if(data.leavesShield)leaveShieldAt(e);if(data.beanDrop&&Math.random()<(data.beanChance??.5))dropEnergyBeans(e,data.beanDrop);game.enemies=game.enemies.filter(x=>x!==e);game.kills++;if(!game.preview){save.mastery[source]=(save.mastery[source]||0)+.8;checkRanks(source);}}
 function once(fn){let called=false;return()=>{if(called)return;called=true;fn?.();};}
 function flyResourceToCounter(sourceEl,targetSelector,kind,onArrive){
@@ -819,11 +826,61 @@ function checkRanks(type){
   if(current<5&&save.mastery[type]>=thresholds[current]){ save.ranks[type]++; game.rankUps.push(`${UNITS[type].name}升至 ${save.ranks[type]} 阶`); persist(); toast(`${UNITS[type].name}完成升阶：${save.ranks[type]} 阶`); }
 }
 
-function flashShot(p,e){
-  fireProjectile(p.col+.5,p.row+.5,targetX(e)+.5,e.row+.5,p.type);
+function flashShot(p,e,damage){
+  fireProjectile(p.col+.5,p.row+.5,targetX(e)+.5,e.row+.5,p.type,0,{damage,sourceType:p.type,sourceRank:p.rank,attacker:p});
 }
-function fireProjectile(x,y,tx,ty,kind='gold',duration=0){const scenic=clamp(Math.hypot(tx-x,ty-y)*.105,.46,1.05);game.projectiles.push({id:++game.entityId,x,y,tx,ty,kind,t:0,duration:Math.max(duration,scenic)});}
-function updateProjectiles(dt){ game.projectiles.forEach(p=>p.t+=dt); game.projectiles=game.projectiles.filter(p=>p.t<p.duration); }
+function projectileRowsForPath(y,ty){
+  const low=Math.min(y,ty)-.5,high=Math.max(y,ty)+.5;return Array.from({length:BOARD_RULES.rows},(_,row)=>row).filter(row=>row+.5>=low&&row+.5<=high);
+}
+function fireProjectile(x,y,tx,ty,kind='gold',duration=0,hit=null){
+  const scenic=clamp(Math.hypot(tx-x,ty-y)*.105,.46,1.05),payload=hit?{...hit,allowedRows:hit.allowedRows||projectileRowsForPath(y,ty),hitIds:new Set(hit.hitIds||[])}:null;
+  game.projectiles.push({id:++game.entityId,x,y,tx,ty,kind,t:0,duration:Math.max(duration,scenic),hit:payload});
+}
+function projectilePosition(p,progress){
+  const x=p.x+(p.tx-p.x)*progress,arc=(p.kind==='spearPawn'?Math.sin(Math.PI*progress)*.72:p.kind==='spearVolley'?Math.sin(Math.PI*progress)*1.05:p.kind==='bombardRook'?Math.sin(Math.PI*progress)*.9:0),y=p.y+(p.ty-p.y)*progress-arc;return {x,y};
+}
+function projectileHalfSize(p){return p.kind==='giantPoison'?{x:.48,y:.38}:p.kind==='giantIce'?{x:.3,y:.24}:p.kind==='bombardRook'?{x:.24,y:.2}:{x:.17,y:.12};}
+function projectileCandidates(p){
+  const rows=p.hit?.allowedRows||[],seen=p.hit?.hitIds||new Set(),dx=p.tx-p.x,dy=p.ty-p.y,length2=dx*dx+dy*dy||1;
+  return [...game.enemies.filter(enemyDamageable),...game.hazards.filter(h=>h.type==='shield')].filter(target=>{
+    if(seen.has(target.id??target)||!rows.includes(target.row))return false;const cx=targetX(target)+.5,cy=target.row+.5,projection=((cx-p.x)*dx+(cy-p.y)*dy)/length2;return projection>=-.1&&projection<=1.2;
+  }).sort((a,b)=>{const ax=targetX(a)+.5,ay=a.row+.5,bx=targetX(b)+.5,by=b.row+.5;return ((ax-p.x)*dx+(ay-p.y)*dy)-((bx-p.x)*dx+(by-p.y)*dy);});
+}
+function applyProjectileEffect(p,target,attacker){
+  if(target.isHazard||!game.enemies.includes(target))return;const hit=p.hit,rank=hit.sourceRank||attacker?.rank||1,source={type:hit.sourceType,rank};
+  if(hit.effect==='elemental')applyElementalHit(target,attacker||source,hit.mult||rankMult(hit.sourceType,rank),hit.iceShard);
+  if(hit.effect==='iceRook'){
+    applyIceControl(target,rank,hit.sourceType,hit.iceShard);pulseAt(target.x+.5,target.row+.5,'freeze');
+  }
+  if(hit.effect==='flameRook')pulseAt(target.x+.5,target.row+.5,'burn');
+  if(hit.effect==='poisonRook'){applyPoisonStatus(target,{duration:hit.poisonSeconds||8,dps:hit.poisonDps||0,sourceType:hit.sourceType,stack:hit.sourceType==='poisonRook'&&rank>=2});pulseAt(target.x+.5,target.row+.5,'poison');}
+  if(hit.effect==='bombard'){
+    const extras=game.enemies.filter(enemy=>enemy!==target&&Math.hypot(enemy.x-target.x,enemy.row-target.row)<=hit.radius).slice(0,hit.maxExtras);extras.forEach(enemy=>damageEnemy(enemy,Math.round(hit.damage*hit.splash),hit.sourceType,attacker));if(hit.double){if(game.enemies.includes(target))damageEnemy(target,hit.damage,hit.sourceType,attacker);extras.filter(enemy=>game.enemies.includes(enemy)).forEach(enemy=>damageEnemy(enemy,hit.damage,hit.sourceType,attacker));}if(hit.slowSeconds)[target,...extras].filter(enemy=>game.enemies.includes(enemy)).forEach(enemy=>enemy.slowTimer=Math.max(enemy.slowTimer||0,hit.slowSeconds));combatVisual('fireVortex',target.x+.5,target.row+.5);
+  }
+  if(hit.effect==='shadowQueen'){
+    const third=(target.shadowMarks||0)>=2;target.shadowMarks=(target.shadowMarks||0)+1;if(rank>=2)target.vulnerableTimer=Math.max(target.vulnerableTimer||0,2);if(third){target.shadowMarks=0;damageStatusEnemy(target,Math.round(260*(hit.mult||1)),hit.sourceType,'shadow');if(rank>=4){const next=game.enemies.filter(enemy=>enemy!==target&&Math.hypot(enemy.x-target.x,enemy.row-target.row)<=2).sort((a,b)=>a.hp-b.hp)[0];if(next)next.shadowMarks=(next.shadowMarks||0)+1;}if(rank>=5&&game.enemies.includes(target)&&target.hp/target.maxHp<.2)damageStatusEnemy(target,350,hit.sourceType,'shadow');}
+  }
+  if(hit.slowSeconds)target.slowTimer=Math.max(target.slowTimer||0,hit.slowSeconds);
+  if(hit.burnSeconds){target.burnTimer=Math.max(target.burnTimer||0,hit.burnSeconds);target.burnDps=hit.burnDps||0;target.burnSource=hit.sourceType;}
+  if(hit.poisonSeconds&&hit.effect!=='poisonRook')applyPoisonStatus(target,{duration:hit.poisonSeconds,dps:hit.poisonDps||0,sourceType:hit.sourceType});
+}
+function resolveProjectileHit(p,target){
+  const hit=p.hit,attacker=game.players.find(unit=>unit===hit.attacker||unit.id===hit.sourceId)||null,rank=hit.sourceRank||attacker?.rank||1,electric=UNITS[hit.sourceType]?.element==='electric'&&!target.isHazard;let amount=hit.damage;if(electric){hit.electricHits=(hit.electricHits||0)+1;if(rank>=3&&hit.electricHits>=3)amount=Math.round(amount*1.25);}const result=damageTarget(target,amount,hit.sourceType,attacker);
+  if(result&&electric&&rank>=4&&attacker){const before=hit.electricRefund||0;hit.electricRefund=Math.min(.24,before+.04);attacker.timer=Math.max(0,attacker.timer-(hit.electricRefund-before));}
+  if(result&&electric&&rank>=5&&!hit.electricSurgeUsed){hit.electricSurgeUsed=true;const linked=[0,1,2,3,4].filter(row=>row!==target.row).map(row=>game.enemies.filter(e=>enemyDamageable(e)&&e.row===row).sort((a,b)=>a.x-b.x)[0]).filter(Boolean);linked.forEach(enemy=>{damageStatusEnemy(enemy,Math.round(amount*.45),hit.sourceType,'storm');combatVisual('lightningLink',target.x+.5,target.row+.5,enemy.x+.5,enemy.row+.5);});}
+  if(result)applyProjectileEffect(p,target,attacker);hit.hitIds.add(target.id??target);return result;
+}
+function projectileOverlapsTarget(p,position,target){
+  // 弹体和当前位置上的敌棋/盾碑使用轴对齐包围盒（AABB）求交。
+  const size=projectileHalfSize(p),cx=targetX(target)+.5,cy=target.row+.5,halfX=target.isHazard ? .43 : enemyHalfWidth(target),halfY=target.isHazard ? .43 : enemyHalfHeight(target);return Math.abs(position.x-cx)<=size.x+halfX&&Math.abs(position.y-cy)<=size.y+halfY;
+}
+function updateProjectiles(dt){
+  for(const p of game.projectiles){
+    const start=clamp(p.t/p.duration,0,1);p.t+=dt;const end=clamp(p.t/p.duration,0,1);if(!p.hit)continue;const travel=Math.hypot((p.tx-p.x)*(end-start),(p.ty-p.y)*(end-start)),steps=Math.max(1,Math.ceil(travel/.16));
+    let consumed=false;for(let step=1;step<=steps&&!consumed;step++){const position=projectilePosition(p,start+(end-start)*step/steps),targets=projectileCandidates(p);for(const target of targets){if(!projectileOverlapsTarget(p,position,target))continue;resolveProjectileHit(p,target);if(!p.hit.pierce){consumed=true;break;}}}if(consumed)p.consumed=true;
+  }
+  game.projectiles=game.projectiles.filter(p=>!p.consumed&&p.t<p.duration);
+}
 
 function spawnEnergyOrb(){
   if(!game||game.over) return;
@@ -845,7 +902,7 @@ function renderEntities(state=game,layer=$("#entityLayer")){
   });
   state.enemies.forEach(e=>{
     const d=ENEMIES[e.type],el=document.createElement('div');el.className=`piece enemy-piece enemy-${e.type} ${d.boss?'boss-piece':''} ${d.giant?'giant-piece':''} ${d.large?'large-piece':''} ${d.summoner?'elephant-piece':''} ${e.slowTimer>0?'slowed-piece':''} ${e.burnTimer>0?'burning-piece':''} ${e.poisonTimer>0?'poisoned-piece':''} ${e.vulnerableTimer>0?'vulnerable-piece':''} ${e.shadowMarks>0?'shadow-marked':''} ${e.reflectActive>0?'reflecting-piece':''}`;el.style.left=`${boardXPercent(e.x+.5)}%`;el.style.top=`${boardYPercent(e.row+.5)}%`;
-    el.innerHTML=`${enemyDecoration(e.type)}<span class="piece-symbol">${d.char}</span><span class="hp-bar"><i style="width:${clamp(e.hp/e.maxHp*100,0,100)}%"></i></span>`;layer.append(el);
+    el.innerHTML=`${enemyDecoration(e.type)}<span class="piece-symbol">${d.char}</span>${(e.poisonStacks||0)>1?`<span class="poison-stack">×${e.poisonStacks}</span>`:''}<span class="hp-bar"><i style="width:${clamp(e.hp/e.maxHp*100,0,100)}%"></i></span>`;layer.append(el);
   });
   state.hazards.forEach(h=>{const el=document.createElement('div');el.className=`board-hazard ${h.type}-hazard`;el.style.left=`${boardXPercent(h.col+.5)}%`;el.style.top=`${boardYPercent(h.row+.5)}%`;el.innerHTML=h.type==='shield'?`<span>盾</span><span class="hp-bar"><i style="width:${clamp(h.hp/h.maxHp*100,0,100)}%"></i></span>`:'<span>❄</span>';layer.append(el);});
   (state.beanDrops||[]).forEach(drop=>{const el=document.createElement('button');el.className='energy-bean-drop';el.dataset.beanId=drop.id;el.title='拾取能量豆（1.5秒后自动收入）';el.style.left=`${boardXPercent(drop.x+.5)}%`;el.style.top=`${boardYPercent(drop.row+.5)}%`;el.innerHTML='<span><i></i></span>';el.onclick=()=>collectEnergyBean(drop);layer.append(el);});

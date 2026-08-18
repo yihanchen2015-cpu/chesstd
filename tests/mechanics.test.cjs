@@ -44,6 +44,7 @@ globalThis.testApi = {
   units: UNITS,
   rankTraits: RANK_TRAITS,
   rookOverload: ROOK_OVERLOAD,
+  iceShardRules: ICE_SHARD_RULES,
   ultTraits: ULT_TRAITS,
   abilitySpecs: ABILITY_SPECS,
   fusionRecipes: FUSION_RECIPES,
@@ -116,6 +117,7 @@ const baseGame = overrides => ({
   wave: 1, kills: 0, mastery: {}, rankUps: [], over: false,
   ...overrides
 });
+const advanceProjectiles=(seconds=2,step=.05)=>{for(let elapsed=0;elapsed<seconds;elapsed+=step)api.updateProjectiles(Math.min(step,seconds-elapsed));};
 
 assert.equal(api.units.rook.attack, 105, "我方车的平衡后基准伤害应为90–120区间中值");
 assert.equal(api.units.queen.cost,450,"后应消耗450能量");
@@ -210,15 +212,15 @@ assert.equal(scoreAttack.duration,120,"计分赛时长应为120秒");
 assert.equal(scoreAttack.targetKills,undefined,"计分赛不应再设置80杀通关目标");
 assert.equal(scoreAttack.scoreAttack,true,"百二十秒模式应按时间内击杀数计分");
 assert.ok(api.growthEnemyPool("spearPawn").includes("digger")&&api.growthEnemyPool("bishop").includes("elephant"),"成长演示应按我方棋子特性安排不同敌军，不得全部使用兵卒");
-assert.equal(Object.keys(api.units).length,39,"成长之路应包含33种常规棋与6种超级融合棋");
-assert.equal(Object.values(api.units).filter(unit=>!unit.fusionOnly).length,33,"可编队的常规棋应为33种");
-assert.deepEqual(plain(Object.keys(api.units).filter(type=>api.units[type].fusionOnly)),["superIceRook","superFlameRook","superPoisonRook","superIceQueen","superFlameQueen","superPoisonQueen"],"六种超级元素棋应只能在战斗中融合获得");
-assert.ok(["iceQueen","flameQueen","poisonQueen"].every(type=>api.units[type]?.shape==="queen"),"冰后、焰后、毒后应补齐为正式后系棋子");
+assert.equal(Object.keys(api.units).length,43,"成长之路应包含35种常规棋与8种超级融合棋");
+assert.equal(Object.values(api.units).filter(unit=>!unit.fusionOnly).length,35,"可编队的常规棋应为35种");
+assert.deepEqual(plain(Object.keys(api.units).filter(type=>api.units[type].fusionOnly)),["superIceRook","superFlameRook","superPoisonRook","superElectricRook","superIceQueen","superFlameQueen","superPoisonQueen","superElectricQueen"],"八种超级元素棋应只能在战斗中融合获得");
+assert.ok(["iceQueen","flameQueen","poisonQueen","electricQueen"].every(type=>api.units[type]?.shape==="queen"),"冰后、焰后、毒后与电能后应全部作为正式后系棋子");
 assert.ok(Object.values(api.units).every(unit => !Object.hasOwn(unit,"symbol")), "我方棋子数据不应再依赖Unicode棋子字形");
 assert.ok(api.unitArt("rook").includes("art-rook") && !/[\u2654-\u265f]/.test(api.unitArt("rook")), "棋子应输出自绘CSS结构");
 assert.ok(Object.keys(api.units).every(type => api.rankTraits[type]?.length === 5), "成长之路应为每枚棋子提供完整的1–5阶演示资料");
 assert.equal(new Set(Object.values(api.rankTraits).map(route=>JSON.stringify(route))).size,Object.keys(api.units).length,"每枚棋子必须拥有不同的五阶成长路线，不能复用同一模板");
-assert.ok(api.rankTraits.twinRook[3][0].includes("换线")&&api.rankTraits.iceRook[1][0].includes("净化")&&api.rankTraits.queen[2][0].includes("五线"),"成长路线应包含跨路支援、环境互动与五线调度等非惯式质变");
+assert.ok(api.rankTraits.twinRook[3][0].includes("换线")&&api.rankTraits.iceRook[2][0].includes("冰棱")&&api.rankTraits.queen[2][0].includes("五线"),"成长路线应包含跨路支援、大冰棱与五线调度等非惯式质变");
 assert.ok(!source.includes("const LEGACY_RANK_TRAITS = {")&&source.includes("五阶不再默认绑定阵亡效果"),"不得保留旧的统一散射、分裂、破阵、阵亡遗技成长模板");
 assert.ok(Object.keys(api.units).every(type => api.ultTraits[type]?.length === 2), "成长之路应为每枚棋子提供能量豆大招资料");
 assert.ok(Object.keys(api.units).every(type=>api.abilitySpecs[type]),"所有常规棋与融合棋必须全部接入正式能量豆大招配置");
@@ -325,36 +327,63 @@ const twinRook = { type: "twinRook", row: 1, col: 1, hp: 1100, maxHp: 1100, time
 const doubleTarget = { type: "soldier", row: 1, x: 5, hp: 800, maxHp: 800 };
 api.setGame(baseGame({ players: [twinRook], enemies: [doubleTarget] }));
 api.updatePlayers(.1);
-assert.equal(doubleTarget.hp, 640, "双车每轮应连发两枚80伤害的车弹");
+assert.equal(doubleTarget.hp,800,"双车的两枚实体弹在发射瞬间不得提前扣血");
 assert.equal(twinRook.timer,1.25,"双车平衡后应提高到每1.25秒攻击一次");
 assert.equal(api.getGame().projectiles[0].y,api.getGame().projectiles[1].y,"双车两弹应在同一水平弹道，不得上下竖排");
 assert.ok(api.getGame().projectiles[0].x>api.getGame().projectiles[1].x&&api.getGame().projectiles[0].tx>api.getGame().projectiles[1].tx,"双车两弹应一前一后紧邻飞行");
 assert.ok(api.getGame().projectiles[0].x-api.getGame().projectiles[1].x>=.55,"双车两弹之间应留出清晰空隙，不得视觉连体");
+advanceProjectiles();assert.equal(doubleTarget.hp, 640, "双车的两枚80伤害车弹应在飞行碰撞后结算");
 
 const iceRook = { type: "iceRook", row: 2, col: 1, hp: 1000, maxHp: 1000, timer: 0, rank: 1 };
 const frozenEnemy = { type: "soldier", row: 2, x: 5, hp: 800, maxHp: 800, slowTimer: 0 };
 api.setGame(baseGame({ players: [iceRook], enemies: [frozenEnemy] }));
 api.updatePlayers(.1);
+assert.equal(frozenEnemy.hp,800,"冰弹发射时不得提前扣血");advanceProjectiles();
 assert.equal(frozenEnemy.hp, 725, "冰车应造成75伤害");
 assert.ok(frozenEnemy.slowTimer >= 3.5, "冰车应施加减速状态");
+const rankTwoIceRook={type:"iceRook",row:1,col:1,hp:1080,maxHp:1080,timer:0,rank:2},rankTwoIceTarget={type:"soldier",row:1,x:5,hp:1000,maxHp:1000,slowTimer:0,frozenTimer:0};
+api.setGame(baseGame({players:[rankTwoIceRook],enemies:[rankTwoIceTarget]}));api.updatePlayers(.1);
+assert.equal(api.getGame().projectiles[0].kind,"iceRook","冰车2阶仍应稳定发射普通冰弹");advanceProjectiles();
+assert.ok(rankTwoIceTarget.slowTimer>=4&&rankTwoIceTarget.frozenTimer===0,"冰车2阶只把冰冻时间延长0.5秒，不能直接完全冻结");
+const rankThreeIceRook={type:"iceRook",row:1,col:1,hp:1160,maxHp:1160,timer:0,rank:3},rankThreeIceTarget={type:"soldier",row:1,x:5,hp:1000,maxHp:1000,slowTimer:0,frozenTimer:0};
+api.setGame(baseGame({players:[rankThreeIceRook],enemies:[rankThreeIceTarget]}));api.updatePlayers(.1);
+assert.equal(api.getGame().projectiles[0].kind,"giantIce","25%判定成功时冰车3阶应发射可见的大冰棱");advanceProjectiles();
+assert.equal(rankThreeIceTarget.frozenTimer,api.iceShardRules.freezeSeconds+api.iceShardRules.rank2Bonus,"大冰棱应将单一目标完全冻住，并继承2阶的0.5秒时长增幅");
+const rankFiveIceRook={type:"iceRook",row:1,col:1,hp:1320,maxHp:1320,timer:0,rank:5},cellIceA={type:"soldier",row:1,x:5.1,hp:2000,maxHp:2000,slowTimer:0,frozenTimer:0},cellIceB={type:"soldier",row:1,x:5.7,hp:2000,maxHp:2000,slowTimer:0,frozenTimer:0};
+api.setGame(baseGame({players:[rankFiveIceRook],enemies:[cellIceA,cellIceB]}));api.updatePlayers(.1);advanceProjectiles();
+assert.ok(cellIceA.frozenTimer===api.iceShardRules.freezeSeconds+api.iceShardRules.rank2Bonus&&cellIceB.frozenTimer===api.iceShardRules.freezeSeconds+api.iceShardRules.rank2Bonus,"冰车5阶大冰棱的30%判定成功时应冻结目标整格内所有敌人");
+assert.deepEqual(plain(api.iceShardRules),{rank3Chance:.25,rank4Chance:.5,cellFreezeChance:.3,freezeSeconds:1.5,slowSeconds:3.5,rank2Bonus:.5},"冰车3–5阶概率与时间必须严格采用新版规则");
 
 const flameRook = { type: "flameRook", row: 3, col: 1, hp: 1050, maxHp: 1050, timer: 0, rank: 1 };
 const burningEnemy = { type: "soldier", row: 3, x: 5, hp: 800, maxHp: 800, burnTimer: 0, poisonTimer: 0, statusTick: 0, slowTimer: 0, attackTimer: 2 };
 api.setGame(baseGame({ players: [flameRook], enemies: [burningEnemy] }));
-api.updatePlayers(.1);
-assert.equal(burningEnemy.hp, 705, "焰车的首发应造成95伤害");
+api.updatePlayers(.1);advanceProjectiles();
+assert.equal(burningEnemy.hp, 665, "焰车火弹应造成普通车弹最低90伤害的1.5倍，即135伤害");
+assert.equal(burningEnemy.burnTimer,0,"焰车火弹不得再附加持续灼烧");
 burningEnemy.statusTick = .95;
 api.updateEnemies(.1);
-assert.equal(burningEnemy.hp, 665, "焰车应每秒追加40点燃烧伤害");
+assert.equal(burningEnemy.hp, 665, "焰车命中后不得继续结算灼烧伤害");
 
 const poisonRook = { type: "poisonRook", row: 4, col: 1, hp: 1050, maxHp: 1050, timer: 0, rank: 1 };
 const poisonedEnemy = { type: "soldier", row: 4, x: 5, hp: 800, maxHp: 800, burnTimer: 0, poisonTimer: 0, statusTick: 0, slowTimer: 0, attackTimer: 2 };
 api.setGame(baseGame({ players: [poisonRook], enemies: [poisonedEnemy] }));
-api.updatePlayers(.1);
+api.updatePlayers(.1);advanceProjectiles();
 assert.equal(poisonedEnemy.hp, 740, "毒车的首发应造成60伤害");
 poisonedEnemy.statusTick = .95;
 api.updateEnemies(.1);
 assert.equal(poisonedEnemy.hp, 710, "毒车应每秒追加30点中毒伤害");
+poisonRook.timer=0;api.updatePlayers(.1);advanceProjectiles();
+assert.equal(poisonedEnemy.poisonStacks,1,"1阶毒车重复命中只能刷新中毒，不能提前获得叠层能力");
+
+const stackingPoisonRook = { type: "poisonRook", row: 4, col: 1, hp: 1134, maxHp: 1134, timer: 0, rank: 2 };
+const stackingPoisonEnemy = { type: "soldier", row: 4, x: 5, hp: 100000, maxHp: 100000, burnTimer: 0, poisonTimer: 0, statusTick: 0, slowTimer: 0, attackTimer: 999 };
+api.setGame(baseGame({ players: [stackingPoisonRook], enemies: [stackingPoisonEnemy] }));
+for(let hit=0;hit<25;hit++){stackingPoisonRook.timer=0;api.updatePlayers(.1);advanceProjectiles();}
+assert.equal(stackingPoisonEnemy.poisonStacks,25,"毒车从2阶开始应能持续累加毒层，且不能存在低层数上限");
+assert.equal(stackingPoisonEnemy.poisonDps,800,"毒车2阶的每层毒伤应独立累加为当前每秒毒伤");
+assert.ok(stackingPoisonEnemy.poisonTimer>=8,"毒车每次叠毒都应刷新8秒持续时间");
+stackingPoisonEnemy.statusTick=.95;const stackedHp=stackingPoisonEnemy.hp;api.updateEnemies(.1);
+assert.equal(stackingPoisonEnemy.hp,stackedHp-800,"叠至25层后应按全部层数结算每秒毒伤");
 
 const shieldPawn={type:"shieldPawn",row:0,col:1,hp:1100,maxHp:1100,timer:1,rank:1};
 api.setGame(baseGame({players:[shieldPawn]}));
@@ -406,48 +435,93 @@ const queen={type:"queen",row:2,col:1,hp:900,maxHp:900,timer:0,rank:1};
 const queenTargets=[1,2,3].map(row=>({type:"soldier",row,x:5,hp:800,maxHp:800}));
 api.setGame(baseGame({players:[queen],enemies:queenTargets}));
 api.updatePlayers(.1);
-assert.ok(queenTargets.every(enemy=>enemy.hp===710),"后应像三台车一样向相邻三路各发一枚90伤害普通炮弹");
+assert.ok(queenTargets.every(enemy=>enemy.hp===800),"后的三路实体弹在发射时不得提前扣血");
 assert.equal(api.getGame().projectiles.length,3,"后每轮应生成三枚普通炮弹");
 assert.ok(api.getGame().projectiles.every(projectile=>projectile.kind==="rook"),"后的弹体必须使用普通车弹而不是圣光");
 assert.equal(queen.timer,1.2,"后应提高到每1.2秒攻击一次");
+advanceProjectiles();assert.ok(queenTargets.every(enemy=>enemy.hp===710),"后应在弹体命中后对相邻三路各造成90伤害");
 
 const iceQueen={type:"iceQueen",row:2,col:1,hp:880,maxHp:880,timer:0,rank:1,attackCycles:0};
 const iceQueenTargets=[1,2,3].map(row=>({type:"soldier",row,x:5,hp:1000,maxHp:1000,slowTimer:0}));
 api.setGame(baseGame({players:[iceQueen],enemies:iceQueenTargets}));api.updatePlayers(.1);
-assert.ok(iceQueenTargets.every(enemy=>enemy.hp===930&&enemy.slowTimer>=3.5),"冰后应向连续三路各发一枚70伤害冰弹并减速");
+assert.ok(iceQueenTargets.every(enemy=>enemy.hp===1000&&enemy.slowTimer===0),"冰后弹体命中前不得提前伤害或减速");
 assert.ok(api.getGame().projectiles.every(projectile=>projectile.kind==="iceRook"),"冰后必须使用冰弹弹体");
+advanceProjectiles();assert.ok(iceQueenTargets.every(enemy=>enemy.hp===930&&enemy.slowTimer>=3.5),"冰后应在三路冰弹命中后造成70伤害并减速");
 const flameQueen={type:"flameQueen",row:2,col:1,hp:900,maxHp:900,timer:0,rank:1,attackCycles:0};
 const flameQueenTargets=[1,2,3].map(row=>({type:"soldier",row,x:5,hp:1000,maxHp:1000,burnTimer:0}));
 api.setGame(baseGame({players:[flameQueen],enemies:flameQueenTargets}));api.updatePlayers(.1);
-assert.ok(flameQueenTargets.every(enemy=>enemy.hp===915&&enemy.burnTimer===3),"焰后应向连续三路各发一枚85伤害火弹并点燃");
+assert.ok(flameQueenTargets.every(enemy=>enemy.hp===1000&&enemy.burnTimer===0),"焰后弹体命中前不得提前伤害或点燃");
 assert.ok(api.getGame().projectiles.every(projectile=>projectile.kind==="flameRook"),"焰后必须使用火弹弹体");
+advanceProjectiles();assert.ok(flameQueenTargets.every(enemy=>enemy.hp===865&&enemy.burnTimer===0),"焰后应在三路各造成135即时伤害且不得点燃");
 const poisonQueen={type:"poisonQueen",row:2,col:1,hp:860,maxHp:860,timer:0,rank:1,attackCycles:0};
 const poisonQueenTargets=[1,2,3].map(row=>({type:"soldier",row,x:5,hp:1000,maxHp:1000,poisonTimer:0}));
 api.setGame(baseGame({players:[poisonQueen],enemies:poisonQueenTargets}));api.updatePlayers(.1);
-assert.ok(poisonQueenTargets.every(enemy=>enemy.hp===945&&enemy.poisonTimer===8),"毒后应向连续三路各发一枚55伤害毒弹并中毒");
+assert.ok(poisonQueenTargets.every(enemy=>enemy.hp===1000&&enemy.poisonTimer===0),"毒后弹体命中前不得提前伤害或中毒");
 assert.ok(api.getGame().projectiles.every(projectile=>projectile.kind==="poisonRook"),"毒后必须使用毒弹弹体");
+advanceProjectiles();assert.ok(poisonQueenTargets.every(enemy=>enemy.hp===945&&enemy.poisonTimer===8),"毒后应在三路毒弹命中后造成55伤害并中毒");
+const electricRook={type:"electricRook",row:0,col:1,hp:1000,maxHp:1000,timer:0,rank:1},electricLine=[3,5,7].map(x=>({type:"soldier",row:0,x,hp:1000,maxHp:1000}));
+api.setGame(baseGame({players:[electricRook],enemies:electricLine}));api.updatePlayers(.1);
+assert.equal(api.getGame().projectiles.length,1,"电能车每轮应发射一枚实体电能弹");assert.equal(api.getGame().projectiles[0].hit.pierce,true,"电能弹必须标记为无限穿透");advanceProjectiles();
+assert.ok(electricLine.every(enemy=>enemy.hp===930),"1阶电能车的一枚电能弹应以一般伤害贯穿本路全部敌军");
+const voltageRook={type:"electricRook",row:0,col:1,hp:1160,maxHp:1160,timer:0,rank:3},voltageLine=[3,5,7].map(x=>({type:"soldier",row:0,x,hp:1000,maxHp:1000}));
+api.setGame(baseGame({players:[voltageRook],enemies:voltageLine}));api.updatePlayers(.1);advanceProjectiles();
+assert.deepEqual(plain(voltageLine.map(enemy=>enemy.hp)),[919,919,899],"电能弹3阶只应强化同一发弹命中的第3名及后续敌军");
+const recoveryRook={type:"electricRook",row:0,col:1,hp:1240,maxHp:1240,timer:0,rank:4},recoveryLine=Array.from({length:8},(_,index)=>({type:"soldier",row:0,x:2.4+index*.75,hp:2000,maxHp:2000}));
+api.setGame(baseGame({players:[recoveryRook],enemies:recoveryLine}));api.updatePlayers(.1);const recoveryTimer=recoveryRook.timer;advanceProjectiles();
+assert.ok(Math.abs(recoveryRook.timer-(recoveryTimer-.24))<1e-9,"电能弹4阶的单发装填返还必须封顶0.24秒");
+const thunderRook={type:"electricRook",row:2,col:1,hp:1320,maxHp:1320,timer:0,rank:5},thunderMain={type:"soldier",row:2,x:4,hp:3000,maxHp:3000},thunderRear={type:"soldier",row:2,x:6,hp:3000,maxHp:3000},thunderLinks=[0,1,3,4].map(row=>({type:"soldier",row,x:5,hp:3000,maxHp:3000}));
+api.setGame(baseGame({players:[thunderRook],enemies:[thunderMain,thunderRear,...thunderLinks]}));api.updatePlayers(.1);advanceProjectiles();
+assert.ok(thunderMain.hp<3000&&thunderRear.hp<3000,"电能车5阶仍应无限穿透本路多名敌军");
+assert.ok(thunderLinks.every(enemy=>enemy.hp===2959),"电能车5阶首次命中应向其他四路最近目标各链出45%伤害雷电");
+const electricQueen={type:"electricQueen",row:2,col:1,hp:850,maxHp:850,timer:0,rank:1,attackCycles:0},electricQueenFront=[1,2,3].map(row=>({type:"soldier",row,x:4,hp:1000,maxHp:1000})),electricQueenRear=[1,2,3].map(row=>({type:"soldier",row,x:7,hp:1000,maxHp:1000}));
+api.setGame(baseGame({players:[electricQueen],enemies:[...electricQueenFront,...electricQueenRear]}));api.updatePlayers(.1);advanceProjectiles();
+assert.ok([...electricQueenFront,...electricQueenRear].every(enemy=>enemy.hp===935),"电能后应向连续三路各发一枚无限穿透电能弹并命中前后排");
 
 const twinQueen={type:"twinQueen",row:2,col:1,hp:950,maxHp:950,timer:0,rank:1};
 const twinQueenTargets=[1,2,3].map(row=>({type:"soldier",row,x:5,hp:800,maxHp:800}));
 api.setGame(baseGame({players:[twinQueen],enemies:twinQueenTargets}));
 api.updatePlayers(.1);
-assert.ok(twinQueenTargets.every(enemy=>enemy.hp===660),"双后应向三路各连续发射两枚70伤害炮弹");
+assert.ok(twinQueenTargets.every(enemy=>enemy.hp===800),"双后的六枚弹在发射时不得提前扣血");
 assert.equal(api.getGame().projectiles.length,6,"双后每轮应生成六枚可见炮弹");
 for(let i=0;i<6;i+=2){assert.equal(api.getGame().projectiles[i].y,api.getGame().projectiles[i+1].y,"双后每路两弹应保持水平紧邻");assert.ok(api.getGame().projectiles[i].x-api.getGame().projectiles[i+1].x>=.55,"双后的双弹应水平分开且不得视觉连体");}
+advanceProjectiles();assert.ok(twinQueenTargets.every(enemy=>enemy.hp===660),"双后应在实体弹命中后向三路各结算两枚70伤害");
 
 const superRook={id:601,type:"superRook",row:2,col:1,hp:1250,maxHp:1250,timer:0,rank:1,attackCycles:0};
 const superRookTarget={type:"soldier",row:2,x:5,hp:2000,maxHp:2000};
 api.setGame(baseGame({players:[superRook],enemies:[superRookTarget],abilityEvents:[]}));api.updatePlayers(.1);
-assert.equal(superRookTarget.hp,1640,"超级车普攻应发出4枚90伤害普通车弹");assert.equal(api.getGame().projectiles.length,4,"超级车每次应生成4枚可见弹体");const superRookXs=api.getGame().projectiles.map(projectile=>projectile.x).sort((a,b)=>a-b);assert.ok(superRookXs.slice(1).every((x,index)=>x-superRookXs[index]>.34),"超级车的4枚弹体应显著分开，不能紧贴或视觉连体");
+assert.equal(superRookTarget.hp,2000,"超级车4枚弹发射时不得提前扣血");assert.equal(api.getGame().projectiles.length,4,"超级车每次应生成4枚可见弹体");const superRookXs=api.getGame().projectiles.map(projectile=>projectile.x).sort((a,b)=>a-b);assert.ok(superRookXs.slice(1).every((x,index)=>x-superRookXs[index]>.34),"超级车的4枚弹体应显著分开，不能紧贴或视觉连体");advanceProjectiles();assert.equal(superRookTarget.hp,1640,"超级车4枚90伤害普通车弹应在碰撞后结算");
 const superQueen={id:602,type:"superQueen",row:2,col:1,hp:1000,maxHp:1000,timer:0,rank:1,attackCycles:0};
 const superQueenTargets=[1,2,3].map(row=>({type:"soldier",row,x:5,hp:2000,maxHp:2000}));
 api.setGame(baseGame({players:[superQueen],enemies:superQueenTargets,abilityEvents:[]}));api.updatePlayers(.1);
-assert.ok(superQueenTargets.every(enemy=>enemy.hp===1640),"超级后普攻应向连续三路各发4枚普通后弹");assert.equal(api.getGame().projectiles.length,12,"超级后每轮应生成三路共12枚弹体");
+assert.ok(superQueenTargets.every(enemy=>enemy.hp===2000),"超级后12枚弹发射时不得提前扣血");assert.equal(api.getGame().projectiles.length,12,"超级后每轮应生成三路共12枚弹体");advanceProjectiles();assert.ok(superQueenTargets.every(enemy=>enemy.hp===1640),"超级后应在碰撞后向连续三路各结算4枚普通后弹");
+
+const dodgeRook={id:620,type:"rook",row:2,col:1,hp:1200,maxHp:1200,timer:0,rank:1,storedShots:0};
+const dodgingChariot={id:621,type:"chariot",row:2,x:5,hp:3200,maxHp:3200,attackTimer:1,teleportTimer:0};
+api.setGame(baseGame({players:[dodgeRook],enemies:[dodgingChariot],abilityEvents:[]}));api.updatePlayers(.1);
+assert.equal(dodgingChariot.hp,3200,"鬼道铁車在车弹飞行前不得提前受伤");api.updateEnemies(.1);
+assert.notEqual(dodgingChariot.row,2,"鬼道铁車应在弹体命中前完成换线");advanceProjectiles();
+assert.equal(dodgingChariot.hp,3200,"已换线的鬼道铁車不得被原第3路弹体凭空命中");
+
+const fanFilterRook={id:622,type:"superRook",row:2,col:1,hp:1250,maxHp:1250,timer:1,rank:1};
+const fanLaneTarget={id:623,type:"soldier",row:2,x:5,hp:2000,maxHp:2000};
+const impossibleFifthLane={id:624,type:"soldier",row:4,x:5,hp:2000,maxHp:2000};
+api.setGame(baseGame({preview:true,players:[fanFilterRook],enemies:[fanLaneTarget,impossibleFifthLane],abilityEvents:[{t:0,kind:"fanRapid",sourceType:"superRook",sourceId:622,row:2,col:1,rank:1,angle:0,flightScale:1,lane:0,ring:0,slot:0,shot:0}]}));
+api.updateAbilityEvents(.01);assert.equal(fanLaneTarget.hp,2000,"超级车扇形弹创建时不得即时扣血");
+assert.deepEqual(plain(api.getGame().projectiles[0].hit.allowedRows),[2],"水平第3路扇形弹应先过滤为仅可命中第3路");advanceProjectiles();
+assert.equal(fanLaneTarget.hp,1910,"超级车水平扇形弹应通过AABB命中第3路敌军");assert.equal(impossibleFifthLane.hp,2000,"第3路水平弹不得误伤第5路敌军");
 
 assert.deepEqual(plain(api.fusionRecipes),{
-  superRook:{iceRook:"superIceRook",flameRook:"superFlameRook",poisonRook:"superPoisonRook"},
-  superQueen:{iceQueen:"superIceQueen",flameQueen:"superFlameQueen",poisonQueen:"superPoisonQueen"}
-},"超级车与超级后应分别接受对应车系、后系的冰焰毒融合");
+  superRook:{iceRook:"superIceRook",flameRook:"superFlameRook",poisonRook:"superPoisonRook",electricRook:"superElectricRook"},
+  superQueen:{iceQueen:"superIceQueen",flameQueen:"superFlameQueen",poisonQueen:"superPoisonQueen",electricQueen:"superElectricQueen"}
+},"超级车与超级后应分别接受对应车系、后系的冰焰毒电融合");
+assert.equal(api.fusionResultFor("superRook","electricRook"),"superElectricRook","超级车上种电能车应融合为超级电能车");
+assert.equal(api.fusionResultFor("superQueen","electricQueen"),"superElectricQueen","超级后上种电能后应融合为超级电能后");
+const superElectricRook={type:"superElectricRook",row:0,col:1,hp:1360,maxHp:1360,timer:0,rank:1,attackCycles:0},superElectricLine=[4,7].map(x=>({type:"soldier",row:0,x,hp:2000,maxHp:2000}));
+api.setGame(baseGame({players:[superElectricRook],enemies:superElectricLine,abilityEvents:[]}));api.updatePlayers(.1);advanceProjectiles();
+assert.ok(superElectricLine.every(enemy=>enemy.hp===1740),"超级电能车的4枚电能弹都应无限穿透前后排");
+const superElectricQueen={type:"superElectricQueen",row:2,col:1,hp:1080,maxHp:1080,timer:0,rank:1,attackCycles:0},superElectricQueenTargets=[1,2,3].flatMap(row=>[4,7].map(x=>({type:"soldier",row,x,hp:2000,maxHp:2000})));
+api.setGame(baseGame({players:[superElectricQueen],enemies:superElectricQueenTargets,abilityEvents:[]}));api.updatePlayers(.1);advanceProjectiles();
+assert.ok(superElectricQueenTargets.every(enemy=>enemy.hp===1740),"超级电能后应在连续三路各以4枚电能弹无限穿透前后排");
 const fusionBase={id:603,type:"superRook",row:2,col:2,hp:625,maxHp:1250,timer:1,rank:2,attackCycles:3,traitHits:2};
 api.setGame(baseGame({config:{loadout:["superRook","iceRook"]},players:[fusionBase],selected:"iceRook",energy:1000,energyCollected:0,cooldowns:{superRook:0,iceRook:0},used:{},abilityEvents:[]}));
 api.placeSelected(2,2);
@@ -457,7 +531,7 @@ assert.equal(api.getGame().cooldowns.iceRook,api.units.iceRook.cd,"融合应正�
 assert.equal(fusionBase.rank,2,"融合应保留较高的棋子阶位");
 assert.equal(fusionBase.hp/fusionBase.maxHp,.5,"融合应保留原棋子的生命比例");
 const superIceTarget={type:"soldier",row:2,x:5,hp:2000,maxHp:2000,slowTimer:0};fusionBase.timer=0;
-api.setGame(baseGame({players:[fusionBase],enemies:[superIceTarget],abilityEvents:[]}));api.updatePlayers(.1);
+api.setGame(baseGame({players:[fusionBase],enemies:[superIceTarget],abilityEvents:[]}));api.updatePlayers(.1);assert.equal(superIceTarget.hp,2000,"超级冰车发射时不得提前扣血");advanceProjectiles();
 assert.equal(superIceTarget.hp,1696,"超级冰车应一轮发射4枚保留2阶倍率的冰弹");
 assert.ok(superIceTarget.slowTimer>=3.5&&api.getGame().projectiles.every(projectile=>projectile.kind==="iceRook"),"超级冰车的4枚弹必须保留冰系效果");
 
@@ -477,7 +551,10 @@ const iceBishopTarget={type:"soldier",row:3,x:2,hp:800,maxHp:800,slowTimer:0,fro
 api.setGame(baseGame({players:[iceBishop],enemies:[iceBishopTarget]}));
 for(let i=0;i<3;i++){iceBishop.timer=0;api.updatePlayers(.1);}
 assert.equal(iceBishopTarget.hp,515,"冰象应按实战参数连续造成三次95伤害");
-assert.ok(iceBishopTarget.frozenTimer>0&&iceBishopTarget.slowTimer>0,"冰象三次命中同一目标后应真正冻结它");
+assert.ok(iceBishopTarget.frozenTimer===0&&iceBishopTarget.slowTimer>=3.5,"冰象1阶重复命中只能减速，不得按旧规则第三次必定冻结");
+const shardBishop={type:"iceBishop",row:2,col:1,hp:680,maxHp:680,timer:0,rank:3},shardBishopTarget={type:"soldier",row:3,x:2,hp:800,maxHp:800,slowTimer:0,frozenTimer:0};
+api.setGame(baseGame({players:[shardBishop],enemies:[shardBishopTarget]}));api.updatePlayers(.1);
+assert.equal(api.getGame().projectiles[0].kind,"giantIce","冰象3阶概率成功时也应显示大冰棱弹体");assert.ok(shardBishopTarget.frozenTimer>0,"冰象大冰棱应完全冻结目标");
 
 api.setSpecialUnlocked("twinQueen",false);
 api.setGame(baseGame({config:{loadout:["queen"]},selected:"queen",energy:1000,energyCollected:1000,cooldowns:{queen:0},used:{},abilityEvents:[],beanDrops:[]}));
@@ -504,6 +581,7 @@ const beanQueenRear=[1,2,3].map(row=>({id:120+row,type:"soldier",row,x:7,hp:2000
 api.setGame(baseGame({preview:true,players:[beanQueen],enemies:[...beanQueenFront,...beanQueenRear],abilityEvents:[],energy:0,energyCollected:0}));
 api.activateEnergyBean(beanQueen,{preview:true});
 for(let i=0;i<16;i++)api.updateAbilityEvents(.11);
+assert.ok(beanQueenFront.every(enemy=>enemy.hp===2000),"后大招的45枚弹在飞行中不得提前扣血");advanceProjectiles();
 assert.ok(beanQueenFront.every(enemy=>enemy.hp===650),"后大招应在三路各连发15枚90伤害普通车弹");
 assert.ok(beanQueenRear.every(enemy=>enemy.hp===2000),"后的普通车弹不应获得棱镜穿透能力");
 
@@ -557,6 +635,7 @@ const beanColumnEnemy={type:"soldier",row:4,x:2.2,hp:1000,maxHp:1000};
 api.setGame(baseGame({config:{loadout:["rook"]},players:[beanRook],enemies:[beanLaneEnemy,beanColumnEnemy],selected:"bean",beans:1,beanDrops:[],abilityEvents:[],energy:0,energyCollected:0}));
 api.placeSelected(2,2);
 for(let i=0;i<16;i++)api.updateAbilityEvents(.11);
+assert.equal(beanLaneEnemy.hp,5000,"车的15连发弹体命中前不得提前扣血");advanceProjectiles();
 assert.equal(beanLaneEnemy.hp,3650,"车的能量豆技能应在1.5秒内连发15枚90伤害炮弹");
 assert.equal(beanColumnEnemy.hp,1000,"车的能量豆连发应沿当前横行攻击");
 
@@ -574,26 +653,28 @@ const beanIce={type:"iceRook",row:1,col:1,hp:1000,maxHp:1000,timer:1,rank:1};
 const beanIceEnemy={type:"soldier",row:1,x:5,hp:5000,maxHp:5000,slowTimer:0};
 api.setGame(baseGame({config:{loadout:["iceRook"]},players:[beanIce],enemies:[beanIceEnemy],hazards:[],selected:"bean",beans:1,beanDrops:[],abilityEvents:[],energy:0,energyCollected:0}));
 api.placeSelected(1,1);
-assert.equal(beanIceEnemy.hp,4900,"冰车大招铺冰时应无法避免地造成100伤害");
-assert.equal(api.getGame().hazards.filter(h=>h.type==="ice").length,7,"冰车大招应冻结自己前方所有棋格");
+assert.equal(beanIceEnemy.hp,5000,"新版冰车大招不得再开场对整路造成无法躲避的冻结伤害");
+assert.equal(api.getGame().hazards.filter(h=>h.type==="ice").length,0,"新版冰车大招不得再直接冻结整路棋格");
 for(let i=0;i<16;i++)api.updateAbilityEvents(.11);
-assert.equal(beanIceEnemy.hp,3775,"冰车铺冰后应连发15枚75伤害冰炮弹");
+advanceProjectiles();
+assert.equal(beanIceEnemy.hp,3875,"冰车大招应只连发15枚75伤害冰炮弹");
 
 const beanFlame={type:"flameRook",row:2,col:1,hp:1050,maxHp:1050,timer:1,rank:1};
 const beanFlameEnemy={type:"soldier",row:2,x:5,hp:5000,maxHp:5000,burnTimer:0};
 api.setGame(baseGame({config:{loadout:["flameRook"]},players:[beanFlame],enemies:[beanFlameEnemy],selected:"bean",beans:1,beanDrops:[],abilityEvents:[],energy:0,energyCollected:0}));
-api.placeSelected(2,1);for(let i=0;i<16;i++)api.updateAbilityEvents(.11);
-assert.equal(beanFlameEnemy.hp,3575,"焰车大招应连发15枚95伤害火炮弹");
-assert.equal(beanFlameEnemy.burnTimer,3,"焰车大招炮弹应保留燃烧效果");
+api.placeSelected(2,1);for(let i=0;i<16;i++)api.updateAbilityEvents(.11);assert.equal(beanFlameEnemy.hp,5000,"焰车大招火弹命中前不得提前扣血");advanceProjectiles();
+assert.equal(beanFlameEnemy.hp,2975,"焰车大招应连发15枚最低135伤害且不灼烧的火炮弹");assert.equal(beanFlameEnemy.burnTimer||0,0,"焰车大招也不得附加持续灼烧");
 
 const beanPoison={type:"poisonRook",row:3,col:1,hp:1050,maxHp:1050,timer:1,rank:1};
 const beanPoisonEnemyA={type:"soldier",row:3,x:4,hp:3000,maxHp:3000};
 const beanPoisonEnemyB={type:"soldier",row:3,x:7,hp:3000,maxHp:3000};
 api.setGame(baseGame({config:{loadout:["poisonRook"]},players:[beanPoison],enemies:[beanPoisonEnemyA,beanPoisonEnemyB],selected:"bean",beans:1,beanDrops:[],abilityEvents:[],energy:0,energyCollected:0}));
 api.placeSelected(3,1);
+assert.equal(beanPoisonEnemyA.hp,3000,"巨型毒球尚未碰到敌军时不得提前扣血");
+assert.equal(api.getGame().projectiles[0].kind,"giantPoison","毒车大招应生成沿地面滚动的巨型毒球");
+advanceProjectiles();
 assert.equal(beanPoisonEnemyA.hp,1500,"巨型毒球应对碰到的敌人造成1500伤害");
 assert.equal(beanPoisonEnemyB.hp,1500,"巨型毒球应顺地面穿过整行");
-assert.equal(api.getGame().projectiles[0].kind,"giantPoison","毒车大招应生成沿地面滚动的巨型毒球");
 
 const iceChariot={type:"iceChariot",row:3,x:7.2,hp:6500,maxHp:6500,attackTimer:1,lastTrailCol:null};
 api.setGame(baseGame({enemies:[iceChariot]}));
@@ -618,6 +699,7 @@ const shieldHazard={type:"shield",isHazard:true,blocksPlant:true,row:2,col:4,hp:
 api.setGame(baseGame({players:[shieldShooter],enemies:[enemyBehindShield],hazards:[shieldHazard]}));
 api.updatePlayers(.1);
 assert.equal(enemyBehindShield.hp,800,"盾碑应截停弩箭并保护后方敌棋");
+assert.equal(shieldHazard.hp,6500,"车弹尚未碰到盾碑时不得提前扣除盾碑生命");advanceProjectiles();
 assert.equal(shieldHazard.hp,6410,"平衡后的90伤害车弹应先命中盾碑");
 
 api.setRank("rook",2);
@@ -653,7 +735,7 @@ assert.equal(frozenTarget.slowTimer,0,"冰车的冰雕需要由连续实战射�
 const fiveLaneQueen={type:"queen",row:2,col:1,hp:900,maxHp:900,timer:0,rank:3,traitHits:0,attackCycles:2};
 const fiveLaneTargets=Array.from({length:5},(_,row)=>({type:"soldier",row,x:5,hp:1000,maxHp:1000}));
 api.setGame(baseGame({players:[fiveLaneQueen],enemies:fiveLaneTargets}));
-api.updatePlayers(.1);
+api.updatePlayers(.1);assert.ok(fiveLaneTargets.every(enemy=>enemy.hp===1000),"后3阶的五路弹也必须等待实体碰撞");advanceProjectiles();
 assert.ok(fiveLaneTargets.every(enemy=>enemy.hp<1000),"后3阶每第3轮应从三线射手质变为覆盖全部五路");
 
 const retreatKnight={type:"knight",row:2,col:4,hp:100,maxHp:750,timer:0,rank:4,traitHits:0,traitCooldown:0,kills:0};
@@ -679,6 +761,7 @@ assert.ok(bloodTarget.hp<800&&bloodPawn.hp>250,"狂战兵3阶应在近战命中�
 const cannonRook={type:"bombardRook",row:2,col:1,hp:950,maxHp:950,timer:0,rank:2,attackCycles:0};
 const cannonMain={type:"soldier",row:2,x:5,hp:800,maxHp:800},cannonSplash={type:"soldier",row:2,x:5.8,hp:800,maxHp:800};
 api.setGame(baseGame({players:[cannonRook],enemies:[cannonMain,cannonSplash]}));api.updatePlayers(.1);
+assert.equal(cannonMain.hp,800,"炮车弹体飞到目标前不得提前爆炸");advanceProjectiles();
 assert.ok(cannonMain.hp<800&&cannonSplash.hp<800,"炮车炮弹必须同时伤害主目标与爆炸范围内敌军");
 
 const rallyPawn={type:"pawn",row:2,col:2,hp:500,maxHp:500,timer:5,rank:1},warKing={type:"warKing",row:2,col:1,hp:1050,maxHp:1050,timer:0,rank:1,supportCycles:0};
@@ -695,6 +778,7 @@ assert.ok(woundedAlly.hp>100&&lightTarget.hp<800,"光象每轮应同时治疗友
 
 const shadowQueen={type:"shadowQueen",row:2,col:1,hp:820,maxHp:820,timer:0,rank:1,attackCycles:0},shadowTarget={type:"soldier",row:2,x:5,hp:800,maxHp:800,shadowMarks:0};
 api.setGame(baseGame({players:[shadowQueen],enemies:[shadowTarget]}));for(let i=0;i<3;i++){shadowQueen.timer=0;api.updatePlayers(.1);}
+assert.equal(shadowTarget.hp,800,"影后的暗弹命中前不得提前扣血或叠印");advanceProjectiles();
 assert.equal(shadowTarget.shadowMarks,0,"影后三次命中应引爆并清空三层暗印");assert.ok(shadowTarget.hp<=270,"三层暗印必须产生独立爆发伤害");
 
 const commandKing={id:501,type:"warKing",row:2,col:1,hp:1050,maxHp:1050,timer:4,rank:1},commandAlly={id:502,type:"pawn",row:2,col:2,hp:500,maxHp:500,timer:5,rank:1};
@@ -721,7 +805,12 @@ assert.ok(growthCss.includes("grid-template-columns:repeat(auto-fill,minmax(108p
 assert.ok(pageHtml.includes('id="loadoutUnitPreview"')&&source.includes("function renderLoadoutPreview()")&&source.includes("<p>${u.desc}</p>"),"编队页卡片上方应显示当前聚焦棋子的基础描述");
 assert.ok(source.includes('Object.entries(UNITS).filter(([,u])=>!u.fusionOnly)')&&source.includes('Object.keys(UNITS).filter(type=>!UNITS[type].fusionOnly&&isUnitUnlocked(type))'),"融合限定棋必须同时从编队页和自定义选棋页隐藏");
 assert.ok(source.includes("item.fusionOnly?'\u878d':rank")&&source.includes("item.fusionOnly?'\u878d合限定'"),"六种融合棋应在成长之路显示融合标识与效果预览");
-assert.ok(growthCss.includes('.skin-iceQueen')&&growthCss.includes('.skin-flameQueen')&&growthCss.includes('.skin-poisonQueen')&&growthCss.includes('.skin-superIceRook')&&growthCss.includes('.skin-superPoisonQueen'),"三种元素后与六种超级融合棋应具有专属外观");
+assert.ok(growthCss.includes('.skin-iceQueen')&&growthCss.includes('.skin-flameQueen')&&growthCss.includes('.skin-poisonQueen')&&growthCss.includes('.skin-electricQueen')&&growthCss.includes('.skin-superIceRook')&&growthCss.includes('.skin-superPoisonQueen')&&growthCss.includes('.skin-superElectricQueen'),"四种元素后与八种超级融合棋应具有专属外观");
+assert.ok(["poisonRook","poisonQueen","poisonBishop","superPoisonRook","superPoisonQueen"].every(type=>/^#[89ab][0-9a-f]{5}$/i.test(api.units[type].color)),"全部毒系棋子的主题色应统一为紫色区间");
+assert.ok(api.rankTraits.poisonRook[1][1].includes("没有上限")&&source.includes("stack:hit.sourceType==='poisonRook'&&rank>=2"),"毒车应从2阶开始获得无层数上限的叠毒机制");
+assert.ok(growthCss.includes(".unit-art.skin-poisonRook")&&growthCss.includes("saturate(1.42) contrast(1.08)")&&growthCss.includes(".enemy-piece.poisoned-piece{filter:"),"毒系棋子与中毒目标必须应用整体滤镜，而非只在外围包一层颜色");
+assert.ok(growthCss.includes(".unit-art.skin-iceRook")&&growthCss.includes("brightness(1.08) drop-shadow(0 0 10px #63d8ee)"),"冰车、冰后、冰象、超级冰系与霜马都应应用整体冰系滤镜");
+assert.ok(growthCss.includes(".proj-giantIce")&&growthCss.includes(".proj-electricRook")&&growthCss.includes(".skin-superElectricRook"),"大冰棱和四种电能棋必须具备独立可见外观");
 assert.ok(growthCss.includes(".choice-card-rank{")&&growthCss.includes(".choice-card-footer{")&&growthCss.includes(".loadout-unit-preview{"),"棋子卡阶数、底栏与编队预览面板应具有独立样式");
 assert.ok(pageHtml.includes('id="snakePitScreen"')&&pageHtml.includes('id="snakeCountRange"')&&pageHtml.includes('min="100" max="1000" step="100"'),"万蛇窟应提供100–1000条紫蛇数量选择界面");
 assert.ok(growthCss.includes(".ultimate-tile-glow{")&&growthCss.includes("@keyframes ultimateTileGlow"),"棋子释放大招时应在对应棋格显示动态底光");
