@@ -10,6 +10,7 @@ function dummyElement() {
     append() {},
     remove() {},
     addEventListener() {},
+    querySelector() { return dummyElement(); },
     querySelectorAll() { return []; },
     innerHTML: "",
     textContent: "",
@@ -42,6 +43,9 @@ let source = sourcePaths.map(file=>fs.readFileSync(file,"utf8")).join("\n");
 source += `
 globalThis.testApi = {
   units: UNITS,
+  unitFamilyOrder: UNIT_FAMILY_ORDER,
+  orderedUnitEntries,
+  orderedUnitTypes,
   rankTraits: RANK_TRAITS,
   rookOverload: ROOK_OVERLOAD,
   iceShardRules: ICE_SHARD_RULES,
@@ -53,10 +57,13 @@ globalThis.testApi = {
   story: STORY,
   challenges: CHALLENGES,
   difficulties: DIFFICULTIES,
+  endlessDifficulties: ENDLESS_DIFFICULTIES,
+  endlessUnlocks: ENDLESS_UNIT_UNLOCKS,
   battleBuffs: BATTLE_BUFFS,
   specialUnlocks: SPECIAL_UNLOCKS,
   setGame(value) { game = value; },
   getGame() { return game; },
+  getSave() { return save; },
   updateEnemies,
   updatePlayers,
   updateAbilityEvents,
@@ -67,6 +74,18 @@ globalThis.testApi = {
   startSnakePit,
   spawnSnakePitBatch,
   spawnCustomArmy,
+  buildEndlessStage,
+  endlessRuleForLevel,
+  endlessStageScale,
+  nextEndlessUnlock,
+  migrateLegacyUnlocks,
+  availableConveyorTypes,
+  seedConveyor,
+  addConveyorCard,
+  updateConveyor,
+  selectedConveyorCard,
+  deploymentAvailable,
+  commitDeployment,
   createPlayer,
   damageEnemy,
   damageStatusEnemy,
@@ -95,8 +114,9 @@ globalThis.testApi = {
   abilitySummary,
   growthEnemyPool,
   isUnitUnlocked,
+  applyCheatCode,
   toggleLoadout,
-  setStoryUnlocked(value) { save.storyUnlocked = value; },
+  setStoryUnlocked(value) { save.storyUnlocked = value; save.endlessLevel = value; },
   setUnlockProgress(key,value) { save.unlockProgress[key] = value; },
   setSpecialUnlocked(type,value) { save.specialUnlocked[type] = value; },
   setSelectedLoadout(value) { selectedLoadout = [...value]; },
@@ -171,7 +191,14 @@ api.setGame(baseGame({projectiles:[prepProjectile]}));api.updateProjectiles(.5);
 assert.equal(api.getGame().projectiles.length,1,"弹体进入准备格后不得按棋盘边界自动删除");
 assert.equal(prepProjectile.t,.5,"准备格中的弹体仍应按原持续时间继续飞行");
 assert.equal(api.autoCollectDelay,1500,"能量球与能量豆应在1.5秒后自动领取");
-assert.ok(api.story.every(level => level.energy === 75), "全部故事关应从75能量开始");
+assert.equal(api.buildEndlessStage(1,"standard").energy,75,"普通无尽关应从75能量开始");
+assert.ok(api.buildEndlessStage(7,"standard").conveyor&&api.buildEndlessStage(7,"standard").energy===0,"第7关应切换为不消耗能量的传送带玩法");
+assert.ok(api.buildEndlessStage(7,"standard").conveyorInterval>=6,"传送带关的随机送卡间隔应明显放慢");
+assert.ok(api.buildEndlessStage(5,"standard").setupPhase&&api.buildEndlessStage(5,"standard").energy===650,"第5关应允许用650能量提前布阵");
+assert.ok(api.buildEndlessStage(10,"standard").boss,"每10关应生成一次首领关");
+assert.equal(api.buildEndlessStage(11,"standard").mode,"trick","无尽关卡应包含镜铲乱阵玩法");
+assert.ok(api.buildEndlessStage(100,"standard").endlessScale>api.buildEndlessStage(10,"standard").endlessScale,"无尽关卡强度应随关数持续提高");
+assert.ok(api.buildEndlessStage(20,"hard").difficultyData.hp>api.buildEndlessStage(20,"standard").difficultyData.hp,"困难模式的敌军生命倍率应高于普通模式");
 assert.ok(api.challenges.filter(level=>!level.fun).every(level => level.energy === 75), "全部常规挑战应从75能量开始");
 assert.equal(api.challenges.length,10,"开始对战应提供六种常规玩法和四种趣味玩法");
 assert.equal(api.challenges.filter(level=>level.fun).length,4,"应提供四种高能量或无限能量趣味关卡");
@@ -194,6 +221,17 @@ assert.equal(api.getGame().beans,0,"自动无限大招不应要求或消耗能�
 assert.ok(infiniteQueen.ultimateIntroShown&&infiniteQueen.ultGlowTimer>=1.5,"无限大招首次释放后应记录开场演出并点亮所在棋格");
 api.getGame().abilityEvents=[];infiniteQueen.infiniteUltTimer=0;api.updateInfiniteUltimates(.01);
 assert.equal(api.getGame().abilityEvents.length,15,"后在后续周期仍应重新发射15发，不受开场演出是否重复影响");
+api.setGame(baseGame({config:{conveyor:true,conveyorPool:["pawn","rook"],conveyorInterval:6.2},conveyorQueue:[],selectedConveyorId:null,conveyorTimer:0,cooldowns:{pawn:0,rook:0},players:[],energy:0,entityId:0}));
+api.seedConveyor(4);
+assert.equal(api.getGame().conveyorQueue.length,4,"传送带关开局应先送来4张棋子卡");
+assert.ok(api.selectedConveyorCard("pawn")&&api.deploymentAvailable("pawn"),"当前传送带卡即使没有能量也应允许种植");
+const firstConveyorId=api.getGame().selectedConveyorId;api.commitDeployment("pawn",2,2);
+assert.equal(api.getGame().conveyorQueue.length,3,"种下传送带棋子后只消耗所选的那一张卡");
+assert.ok(!api.getGame().conveyorQueue.some(card=>card.id===firstConveyorId),"已种植的传送带卡不得留在队列中");
+for(let i=0;i<12;i++)api.addConveyorCard();
+assert.equal(api.getGame().conveyorQueue.length,8,"传送带最多暂存8张卡，满载后暂停送入而不是裁剪已有卡片");
+api.setGame(baseGame({config:{infiniteEnergy:true},energy:150,cooldowns:{rook:0},players:[]}));api.commitDeployment("rook",2,2);
+assert.equal(api.getGame().energy,999999,"自定义房间的无限能量应在每次部署后立即补满");
 const normalizedRoom=api.normalizeCustomRoom({enemies:[{type:"general",count:150,row:3},{type:"missing",count:5,row:0}],units:[{type:"iceBishop",rank:8},{type:"rook",rank:3}]});
 assert.deepEqual(plain(normalizedRoom.enemies),[{type:"general",count:100,row:3}],"自定义房间应校验敌军种类、单队数量和出兵行");
 assert.deepEqual(plain(normalizedRoom.units),[{type:"iceBishop",rank:5},{type:"rook",rank:3}],"自定义房间应为每种我方棋子保存独立1–5阶设置");
@@ -231,10 +269,23 @@ assert.ok(api.abilitySummary("bombardRook").includes("溅射")&&api.abilitySumma
 api.setStoryUnlocked(1);
 assert.deepEqual(plain(Object.keys(api.units).filter(type=>!api.units[type].fusionOnly&&api.isUnitUnlocked(type))), ["pawn","rook","king"], "初始应只解锁兵、车、王");
 api.setStoryUnlocked(3);
-assert.ok(api.isUnitUnlocked("bishop") && api.isUnitUnlocked("twinRook") && api.isUnitUnlocked("spearPawn"), "第3章应解锁象、双车与投矛兵");
-api.setStoryUnlocked(6);
-assert.ok(api.isUnitUnlocked("poisonRook") && api.isUnitUnlocked("prismQueen"), "第6章应解锁毒车与棱镜后");
-assert.ok(!api.isUnitUnlocked("twinQueen")&&!api.isUnitUnlocked("iceBishop"),"秘藏衍生棋不能仅靠故事推进解锁");
+assert.ok(api.isUnitUnlocked("knight")&&!api.isUnitUnlocked("shieldPawn"), "第3关应解锁马，但尚未解锁第5关的盾兵");
+api.setStoryUnlocked(15);
+assert.ok(api.isUnitUnlocked("bishop")&&api.isUnitUnlocked("twinRook")&&api.isUnitUnlocked("queen"), "推进到第15关时应依次解锁象、双车与后");
+api.setStoryUnlocked(60);
+assert.ok(api.isUnitUnlocked("poisonRook")&&api.isUnitUnlocked("prismQueen"), "推进到第60关时应解锁毒车与棱镜后");
+api.setStoryUnlocked(125);
+assert.ok(api.isUnitUnlocked("superRook")&&api.isUnitUnlocked("superQueen"), "第125关应完成超级车与超级后的常规解锁路线");
+const oldSixUnlocks=api.migrateLegacyUnlocks({storyUnlocked:6}),oldThreeUnlocks=api.migrateLegacyUnlocks({storyUnlocked:3});
+assert.ok(["poisonRook","electricQueen","prismQueen","superRook","superQueen"].every(type=>oldSixUnlocks.includes(type)),"旧版故事已解锁的常规棋必须迁移成永久解锁，不受新版关卡表影响");
+assert.ok(["knight","spearPawn","bishop","twinRook"].every(type=>oldThreeUnlocks.includes(type))&&!oldThreeUnlocks.includes("queen"),"旧版中途进度应严格按旧unlockAt保留，不能多解锁下一章棋子");
+const oldCultivatedUnlocks=api.migrateLegacyUnlocks({mastery:{flameRook:1},ranks:{shadowQueen:2}});
+assert.ok(oldCultivatedUnlocks.includes("flameRook")&&oldCultivatedUnlocks.includes("shadowQueen"),"旧存档中已有培养或升阶记录的棋子也应视为历史已解锁");
+assert.deepEqual(plain(api.migrateLegacyUnlocks({})),[],"全新存档不得被旧版兼容逻辑额外解锁棋子");
+const scheduledTypes=api.endlessUnlocks.flatMap(entry=>entry.types).sort(),scheduledCandidates=Object.keys(api.units).filter(type=>!api.units[type].fusionOnly&&!api.units[type].unlockKey).sort();
+assert.deepEqual(plain(scheduledTypes),plain(scheduledCandidates),"所有非秘藏常规棋都必须出现在无尽关卡解锁表中");
+assert.equal(api.nextEndlessUnlock(100).level,108,"关卡界面应能找到当前进度之后的下一次棋子解锁");
+assert.ok(!api.isUnitUnlocked("twinQueen")&&!api.isUnitUnlocked("iceBishop"),"秘藏衍生棋不能仅靠无尽关卡推进解锁");
 assert.equal(api.specialUnlocks.twinQueen.description,"在同一局战斗中部署2枚后","双后应拥有可执行的同局部署条件");
 api.setUnlockProgress("iceSculptures",12);
 assert.ok(api.isUnitUnlocked("iceBishop"),"累计制造12次冰雕后应解锁冰象");
@@ -799,11 +850,32 @@ const twinRookDemo=api.buildGrowthStage();
 assert.ok(twinRookDemo.includes('growth-board-scale')&&twinRookDemo.includes('<div class="board">')&&twinRookDemo.includes("entity-layer")&&twinRookDemo.includes("effect-layer")&&!twinRookDemo.includes("demo-shot"),"成长演示必须在原尺寸正式棋盘内挂载正式战斗渲染层，不能再独立绘制炮弹");
 const growthCss=fs.readFileSync(path.join(__dirname,"..","styles.css"),"utf8");
 const pageHtml=fs.readFileSync(path.join(__dirname,"..","index.html"),"utf8");
+const renderEntitiesSource=source.slice(source.indexOf("function renderEntities"),source.indexOf("function getEffectLayer"));
+assert.ok(source.includes("const renderLayerCaches = new WeakMap()")&&source.includes("function cachedRenderNode")&&source.includes("function finishRenderCache")&&!renderEntitiesSource.includes('layer.innerHTML=""'),"战斗渲染必须按实体ID复用DOM，不能每帧清空并重建全部棋子、敌军和子弹");
+assert.ok(source.includes("function buildProjectileTargetRows()")&&source.includes("const targetsByRow=buildProjectileTargetRows()")&&source.includes("targets=projectileCandidates(p,targetsByRow)"),"AABB弹体检测应每帧建立一次按路目标索引，不能让每发子弹在每个检测步都扫描全场敌军");
+assert.ok(growthCss.includes("contain:layout style")&&growthCss.includes(".entity-layer{will-change:contents}")&&growthCss.includes(".projectile { position:absolute;left:0;top:0;z-index:5")&&source.includes('setRenderStyle(el,"translate"'),"实体层与完整弹幕应使用布局隔离和位移更新，不能靠裁剪弹体换性能");
+assert.ok(pageHtml.includes("<h2>无尽挑战</h2>")&&pageHtml.includes("无限关卡 · 玩法轮换 · 持续解锁棋子")&&source.includes('data-endless-difficulty="standard"')&&source.includes('data-endless-difficulty="hard"'),"原故事入口应改成显示当前关数并可选择普通、困难模式的无尽挑战");
+assert.ok(source.includes('mode:"conveyor"')&&source.includes('mode:"setup"')&&source.includes("function updateConveyor")&&growthCss.includes(".conveyor-card"),"无尽挑战必须包含真实送卡的传送带玩法和提前布阵玩法");
+assert.ok(source.includes("if(config.conveyor){pendingBuffBattle={...config,conveyorPool:availableConveyorTypes()};openBuffSelection();return;}")&&source.includes("game.config.conveyorPool?.length?game.config.conveyorPool:availableConveyorTypes()"),"传送带关必须跳过战前选棋，并从全部已解锁常规棋中独立随机送卡");
+assert.ok(growthCss.includes(".conveyor-machine{")&&growthCss.includes(".conveyor-belt::before{")&&growthCss.includes("@keyframes conveyorBeltTravel")&&source.includes("约 ${interval.toFixed(1)} 秒 / 张"),"传送带应有机架、滚轴、移动履带与明确的慢速送卡反馈");
+assert.ok(source.includes("function migrateLegacyUnlocks")&&source.includes("save.legacyUnlockedUnits?.includes(type)"),"旧版已解锁棋子应通过存档迁移清单在新版中永久保留");
+assert.ok(pageHtml.includes("无限能量 · 正常部署冷却 · 布阵后手动来敌")&&source.includes("kind:'custom',id:'custom',title:'自定义房间',objective:'清除自定义敌军',waves:1,infiniteEnergy:true"),"自定义房间应在界面和实战配置中统一使用无限能量");
+assert.ok(source.includes("game.config.infiniteEnergy?'∞':Math.floor(game.energy)"),"无限能量房间的战斗顶栏应直接显示∞，不能伪装成一个有限大数");
 assert.ok(source.includes('class="choice-card-art"')&&source.includes('class="choice-card-rank">${rank}')&&source.includes('class="choice-card-footer"><i>✦</i>${u.cost}'),"战斗与编队棋子卡应以棋子图像为主体，并显示右上阶数和底部能量");
 assert.ok(source.includes('class="choice-card-footer growth-card-name">${item.name}')&&!source.includes("growth-list-art"),"成长之路卡片应复用图像与阶数结构，并在底部显示名称而非能量");
 assert.ok(growthCss.includes("grid-template-columns:repeat(auto-fill,minmax(108px,1fr))")&&growthCss.includes("grid-template-columns:repeat(2,minmax(0,1fr))"),"编队与成长棋子列表应改为更紧凑的多列卡片布局");
 assert.ok(pageHtml.includes('id="loadoutUnitPreview"')&&source.includes("function renderLoadoutPreview()")&&source.includes("<p>${u.desc}</p>"),"编队页卡片上方应显示当前聚焦棋子的基础描述");
-assert.ok(source.includes('Object.entries(UNITS).filter(([,u])=>!u.fusionOnly)')&&source.includes('Object.keys(UNITS).filter(type=>!UNITS[type].fusionOnly&&isUnitUnlocked(type))'),"融合限定棋必须同时从编队页和自定义选棋页隐藏");
+const orderedTypes=api.orderedUnitTypes();
+const orderedFamilies=[...new Set(orderedTypes.map(type=>api.units[type].shape))];
+assert.deepEqual(Array.from(orderedFamilies),Array.from(api.unitFamilyOrder),"棋子应统一按车系、后系、兵系、王系、马系、象系排列");
+for(const family of api.unitFamilyOrder){
+  const familyTypes=orderedTypes.filter(type=>api.units[type].shape===family);
+  assert.equal(familyTypes[0],family,`${family}系应把基础棋排在最前`);
+  const firstFusion=familyTypes.findIndex(type=>api.units[type].fusionOnly);
+  if(firstFusion>=0)assert.ok(familyTypes.slice(firstFusion).every(type=>api.units[type].fusionOnly),`${family}系的融合限定棋应排在普通衍生棋之后`);
+}
+assert.ok(source.includes('orderedUnitEntries({includeFusion:false})')&&source.includes('orderedUnitTypes({includeFusion:false}).filter(isUnitUnlocked)')&&source.includes('orderedUnitEntries({includeFusion:false,allowed})')&&source.includes('orderedUnitEntries().map'),"编队、对战选棋、自定义房间与成长之路应共用按系排序");
+assert.ok(api.orderedUnitTypes({includeFusion:false}).every(type=>!api.units[type].fusionOnly),"融合限定棋必须同时从编队页、自定义选棋页和战斗卡槽隐藏");
 assert.ok(source.includes("item.fusionOnly?'\u878d':rank")&&source.includes("item.fusionOnly?'\u878d合限定'"),"六种融合棋应在成长之路显示融合标识与效果预览");
 assert.ok(growthCss.includes('.skin-iceQueen')&&growthCss.includes('.skin-flameQueen')&&growthCss.includes('.skin-poisonQueen')&&growthCss.includes('.skin-electricQueen')&&growthCss.includes('.skin-superIceRook')&&growthCss.includes('.skin-superPoisonQueen')&&growthCss.includes('.skin-superElectricQueen'),"四种元素后与八种超级融合棋应具有专属外观");
 assert.ok(["poisonRook","poisonQueen","poisonBishop","superPoisonRook","superPoisonQueen"].every(type=>/^#[89ab][0-9a-f]{5}$/i.test(api.units[type].color)),"全部毒系棋子的主题色应统一为紫色区间");
@@ -815,7 +887,11 @@ assert.ok(growthCss.includes(".choice-card-rank{")&&growthCss.includes(".choice-
 assert.ok(pageHtml.includes('id="snakePitScreen"')&&pageHtml.includes('id="snakeCountRange"')&&pageHtml.includes('min="100" max="1000" step="100"'),"万蛇窟应提供100–1000条紫蛇数量选择界面");
 assert.ok(growthCss.includes(".ultimate-tile-glow{")&&growthCss.includes("@keyframes ultimateTileGlow"),"棋子释放大招时应在对应棋格显示动态底光");
 assert.ok(growthCss.includes(".proj-rook,.proj-queen,.proj-twinRook{")&&growthCss.includes("clip-path:polygon(0 50%,72% 0,100% 50%,72% 100%)")&&growthCss.includes("box-shadow:none")&&growthCss.includes(".proj-rook::after,.proj-queen::after,.proj-twinRook::after{display:none}"),"普通车弹与普通后弹应使用不发光的棱锥形弹体");
-assert.ok(growthCss.includes(".proj-iceRook,.proj-flameRook {")&&growthCss.includes("transform:translate(-50%,-50%) rotate(var(--shot-angle))"),"冰弹与火弹应沿用普通弹的棱锥形并朝弹道方向旋转");
+assert.ok(growthCss.includes(".proj-iceRook,.proj-flameRook {")&&growthCss.includes(".proj-iceRook::before")&&growthCss.includes(".proj-flameRook::before")&&growthCss.includes("clip-path:polygon(0 50%,70% 0,100% 50%,70% 100%)"),"冰弹与火弹应保留棱锥形主体并拥有独立的属性纹理");
+assert.ok(source.includes("el.style.setProperty('--shot-bob'")&&source.includes("el.style.setProperty('--shot-flicker'")&&source.includes("el.style.setProperty('--shot-slide'"),"属性弹体的摆动、闪烁与纹理流动必须由战斗时间持续驱动，不能在重绘时反复重启动画");
+assert.ok(growthCss.includes(".proj-poisonRook::after")&&growthCss.includes(".proj-electricRook::before")&&growthCss.includes("radial-gradient(circle at 82% 50%")&&growthCss.includes(".proj-giantPoison {"),"毒弹应具有黏液拖尾，电弹应形成连续电团，巨型毒弹应沿用紫色主题");
+assert.ok(growthCss.includes(".visual-iceMuzzle span")&&growthCss.includes(".visual-fireMuzzle span")&&growthCss.includes(".visual-toxicMuzzle span")&&growthCss.includes(".visual-electricMuzzle span")&&growthCss.includes("@keyframes elementMuzzleBloom"),"冰、火、毒、电四种炮口应具有不同的绽放动画");
+assert.ok(growthCss.includes(".effect-freeze::before")&&growthCss.includes(".effect-burn::before")&&growthCss.includes(".effect-poison::before")&&growthCss.includes(".effect-storm::before")&&source.includes("element==='electric'?'storm'"),"四种属性弹命中时应播放对应的碎冰、火花、毒泡和电弧效果");
 assert.ok(growthCss.includes("--cell: clamp(62px, 7vw, 100px)")&&growthCss.includes("width: calc(var(--cell) * 11)")&&growthCss.includes("height: calc(var(--cell) * 7)")&&growthCss.includes("grid-template-columns: repeat(11,1fr)")&&growthCss.includes("grid-template-rows: repeat(7,1fr)"),"扩展后的7×11棋盘应使用进一步放大的格子尺寸");
 assert.ok(growthCss.includes(".grid-cell.prep-cell { cursor:default;border:0;background:transparent;box-shadow:none")&&growthCss.includes('.board[data-theme="frozen"]')&&growthCss.includes('.board[data-theme="snakePit"]'),"准备区不应显示棋格分割，并应透出各地图的环境背景");
 assert.ok(source.includes("for(let r=-BOARD_RULES.prep")&&source.includes("if(onCell&&!prep)"),"准备格应参与渲染但不能绑定部署操作");
@@ -842,5 +918,14 @@ const beanSuperRook={type:"superRook",row:2,col:1,hp:1250,maxHp:1250,timer:0,ran
 api.setGame(baseGame({preview:true,players:[beanSuperRook],abilityEvents:[],energy:0,energyCollected:0}));api.activateEnergyBean(beanSuperRook,{preview:true});assert.equal(api.getGame().abilityEvents.length,60,"超级车大招应排入60发普通车弹");assert.equal(Math.min(...api.getGame().abilityEvents.map(event=>event.angle)),-22.5,"超级车45度扇形上沿应为负22.5度");assert.equal(Math.max(...api.getGame().abilityEvents.map(event=>event.angle)),22.5,"超级车45度扇形下沿应为正22.5度");assert.equal(new Set(api.getGame().abilityEvents.map(event=>event.t)).size,5,"超级车扇区应由5层弹幕沿射程铺开");assert.equal(api.getGame().abilityEvents.filter(event=>event.t===0).length,12,"超级车每层应同时横向铺开12发，而非单弹沿角度扫描");assert.ok(new Set(api.getGame().abilityEvents.map(event=>event.flightScale)).size>1,"同层弹体应具有轻微速度差，避免形成整齐的单排弹墙");assert.equal(api.ultimateCycleSeconds(beanSuperRook),1.5,"超级车大招应在1.5秒内完成一轮");
 const beanSuperQueen={type:"superQueen",row:2,col:1,hp:1000,maxHp:1000,timer:0,rank:1,id:94};
 api.setGame(baseGame({preview:true,players:[beanSuperQueen],abilityEvents:[],energy:0,energyCollected:0}));api.activateEnergyBean(beanSuperQueen,{preview:true});assert.equal(api.getGame().abilityEvents.length,180,"超级后大招应排入180发普通后弹");assert.deepEqual(plain([1,2,3].map(row=>api.getGame().abilityEvents.filter(event=>event.row===row).length)),[60,60,60],"超级后应以连续三路各展开一组60发扇形");assert.equal(api.getGame().abilityEvents.filter(event=>event.t===0).length,36,"超级后首层应从三路同时铺开36发弹体");assert.equal(api.ultimateCycleSeconds(beanSuperQueen),1.5,"超级后的180发大招也应每1.5秒循环一次");api.updateAbilityEvents(.01);assert.equal(api.getGame().projectiles.length,36,"超级后大招首拍应从三路同时铺出三排、每排12发");assert.ok(api.getGame().projectiles.every(projectile=>projectile.kind==='rook'),"超级车与超级后大招都应使用普通车弹体");
+
+const cheatBefore={rank:api.getSave().ranks.pawn,legacy:[...api.getSave().legacyUnlockedUnits]};
+assert.equal(api.applyCheatCode("wrong-code"),false,"错误作弊码不得生效");
+assert.deepEqual(plain({rank:api.getSave().ranks.pawn,legacy:api.getSave().legacyUnlockedUnits}),plain(cheatBefore),"错误作弊码不得修改任何解锁或阶位数据");
+assert.equal(api.applyCheatCode("2015yhc886"),true,"正确作弊码应立即生效");
+assert.ok(Object.keys(api.units).every(type=>api.getSave().ranks[type]===5&&api.getSave().mastery[type]>=600),"作弊码应把包括融合棋在内的全部棋子提升至5阶并补齐熟练度");
+assert.ok(Object.keys(api.units).filter(type=>!api.units[type].fusionOnly).every(api.isUnitUnlocked),"作弊码应解锁全部可选择的常规与秘藏棋子");
+assert.ok(Object.keys(api.units).filter(type=>api.units[type].unlockKey).every(type=>api.getSave().specialUnlocked[type]),"作弊码应永久写入所有秘藏棋的特殊解锁状态");
+assert.ok(pageHtml.includes('id="cheatTrigger"')&&source.includes("window.prompt('请输入隐藏口令')")&&source.includes("'2015yhc886'"),"首页红色‘象棋’应可点击并弹出口令输入框");
 
 console.log("成长之路与核心战斗机制测试通过");

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#15120e" />
   <title>象棋大战象棋</title>
-  <link rel="stylesheet" href="styles.css?v=20260818-element-rework" />
+  <link rel="stylesheet" href="styles.css?v=20260819-cheat-code" />
 </head>
 <body>
   <div id="app">
@@ -21,13 +21,13 @@
       <main class="hero">
         <div class="hero-copy">
           <div class="eyebrow">CHESS × XIANGQI · TOWER DEFENSE</div>
-          <h1><span>象棋大战</span><strong>象棋</strong></h1>
+          <h1><span>象棋大战</span><strong id="cheatTrigger" role="button" tabindex="0" aria-label="输入隐藏口令">象棋</strong></h1>
           <p class="hero-subtitle">当王冠踏入楚河汉界，<br />每一格都将成为战场。</p>
 
           <div class="home-actions">
             <button class="primary-button story-button" id="storyButton">
               <span class="button-glyph drawn-crown"><i></i></span>
-              <span><b>故事模式</b><small>营救被紫蛇掳走的挚友</small></span>
+              <span><b>无尽挑战</b><small>无限关卡 · 玩法轮换 · 持续解锁棋子</small></span>
               <i>→</i>
             </button>
             <button class="primary-button battle-button" id="battleButton">
@@ -72,15 +72,15 @@
     <section id="storyScreen" class="screen menu-screen">
       <header class="page-header">
         <button class="back-button" data-open="homeScreen">←</button>
-        <div><span class="eyebrow">CAMPAIGN</span><h2>故事模式</h2></div>
-        <div class="chapter-progress"><span id="storyProgressLabel">序章</span><div><i id="storyProgressBar"></i></div></div>
+        <div><span class="eyebrow">ENDLESS CHALLENGE</span><h2>无尽挑战</h2></div>
+        <div class="chapter-progress"><span id="storyProgressLabel">当前第 1 关</span><div><i id="storyProgressBar"></i></div></div>
       </header>
       <main class="story-layout">
         <aside class="story-intro">
-          <span class="section-number">01</span>
-          <h3>穿过<br />楚河汉界</h3>
-          <p>紫色的蛇影卷走了露西，只留下一枚破碎的白色兵徽。沿着它留下的踪迹，向东进发。</p>
-          <div class="quote">“我会把你带回来。”<br /><b>— 亚瑟</b></div>
+          <span class="section-number">NO FINAL CHAPTER</span>
+          <h3>越过一关，<br />再越过一关。</h3>
+          <p>关卡没有终点。普通防守、传送带、提前布阵、冰封与重甲规则会持续轮换，敌军也会随关数逐步增强。</p>
+          <div class="quote">每隔数关会有新棋子加入王冠军。<br /><b>选择普通或困难模式继续推进。</b></div>
         </aside>
         <div class="level-map" id="levelMap"></div>
       </main>
@@ -148,7 +148,7 @@
         </section>
       </main>
       <footer class="custom-room-footer">
-        <div><span>房间规则</span><b>2000初始能量 · 正常部署冷却 · 布阵后手动来敌</b></div>
+        <div><span>房间规则</span><b>无限能量 · 正常部署冷却 · 布阵后手动来敌</b></div>
         <button class="primary-button compact" id="customRoomStart">确认房间 · 选择战前增益</button>
       </footer>
     </section>
@@ -327,8 +327,8 @@
 
     <div id="toast" class="toast"></div>
   </div>
-  <script src="js/game-data.js?v=20260818-element-rework"></script>
-  <script src="js/growth-mode.js?v=20260818-element-rework"></script>
-  <script src="game.js?v=20260818-element-rework"></script>
+  <script src="js/game-data.js?v=20260819-cheat-code"></script>
+  <script src="js/growth-mode.js?v=20260819-cheat-code"></script>
+  <script src="game.js?v=20260819-cheat-code"></script>
 </body>
 </html>

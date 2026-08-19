@@ -23,9 +23,23 @@ let growthDemoGame = null;
 let growthDemoRaf = 0;
 let effectLayerOverride = null;
 let growthScaleObserver = null;
+const ENDLESS_UNLOCK_LEVEL_BY_TYPE = Object.fromEntries(ENDLESS_UNIT_UNLOCKS.flatMap(entry=>entry.types.map(type=>[type,entry.level])));
+const renderLayerCaches = new WeakMap();
 
+function migrateLegacyUnlocks(stored={}){
+  const kept=new Set(Array.isArray(stored.legacyUnlockedUnits)?stored.legacyUnlockedUnits:[]);
+  if(!stored.unlockMigrationVersion){
+    const oldStory=Number.isFinite(+stored.storyUnlocked)&&+stored.storyUnlocked<=6?Math.max(1,Math.floor(+stored.storyUnlocked)):0;
+    Object.entries(UNITS).forEach(([type,u])=>{
+      if(u.fusionOnly)return;
+      if(!u.unlockKey&&oldStory&&(u.unlockAt||99)<=oldStory)kept.add(type);
+      if((stored.mastery?.[type]||0)>0||(stored.ranks?.[type]||1)>1||stored.specialUnlocked?.[type])kept.add(type);
+    });
+  }
+  return [...kept].filter(type=>UNITS[type]&&!UNITS[type].fusionOnly);
+}
 function loadSave(){
-  try { const stored=JSON.parse(localStorage.getItem("chessWarSave")||"{}");return {...defaults,...stored,ranks:{...defaults.ranks,...stored.ranks},mastery:{...defaults.mastery,...stored.mastery},unlockProgress:{...defaults.unlockProgress,...stored.unlockProgress},specialUnlocked:{...defaults.specialUnlocked,...stored.specialUnlocked}}; }
+  try { const stored=JSON.parse(localStorage.getItem("chessWarSave")||"{}"),endlessLevel=Math.max(1,Math.floor(+(stored.endlessLevel??stored.storyUnlocked??1)||1)),legacyUnlockedUnits=migrateLegacyUnlocks(stored);return {...defaults,...stored,endlessLevel,storyUnlocked:endlessLevel,legacyUnlockedUnits,unlockMigrationVersion:1,ranks:{...defaults.ranks,...stored.ranks},mastery:{...defaults.mastery,...stored.mastery},unlockProgress:{...defaults.unlockProgress,...stored.unlockProgress},specialUnlocked:{...defaults.specialUnlocked,...stored.specialUnlocked}}; }
   catch { return structuredClone(defaults); }
 }
 function persist(){ localStorage.setItem("chessWarSave", JSON.stringify(save)); }
@@ -38,11 +52,23 @@ function unitArt(type,extra=""){
   return `<span class="unit-art art-${u.shape} skin-${type} ${extra}" style="--art-color:${u.color}" aria-hidden="true"><i class="art-body"></i><i class="art-mark"></i><i class="art-glow"></i></span>`;
 }
 
+function applyCheatCode(code){
+  if(String(code??'').trim()!=='2015yhc886'){if(code!==null&&code!==undefined)toast('口令错误');return false;}
+  const regularTypes=Object.keys(UNITS).filter(type=>!UNITS[type].fusionOnly),lastUnlock=ENDLESS_UNIT_UNLOCKS.at(-1)?.level||125;
+  save.legacyUnlockedUnits=[...regularTypes];save.unlockMigrationVersion=1;save.endlessLevel=Math.max(currentEndlessLevel(),lastUnlock);save.storyUnlocked=save.endlessLevel;
+  Object.keys(UNITS).forEach(type=>{save.ranks[type]=5;save.mastery[type]=Math.max(save.mastery[type]||0,600);});
+  Object.entries(UNITS).forEach(([type,u])=>{if(u.unlockKey){save.specialUnlocked[type]=true;const rule=specialUnlockRule(type);if(rule&&!rule.battleOnly)save.unlockProgress[u.unlockKey]=Math.max(save.unlockProgress[u.unlockKey]||0,rule.target);}});
+  persist();updateHome();toast('隐藏口令生效 · 全棋子解锁并升至5阶');return true;
+}
+function openCheatPrompt(){const code=window.prompt('请输入隐藏口令');if(code!==null)applyCheatCode(code);}
+
 function init(){
   $$('[data-open]').forEach(b=>b.addEventListener('click',()=>{ const id=b.dataset.open; if(id==='archiveScreen') renderArchive(); showScreen(id); }));
   $("#storyButton").onclick=()=>{ renderStory(); showScreen("storyScreen"); };
   $("#battleButton").onclick=()=>{ renderChallenges(); showScreen("battleScreen"); };
   $("#growthButton").onclick=()=>{ renderGrowth(); showScreen("growthScreen"); };
+  $("#cheatTrigger").onclick=openCheatPrompt;
+  $("#cheatTrigger").onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openCheatPrompt();}};
   $("#dialogueNext").onclick=nextDialogue;
   $("#dialogueSkip").onclick=finishDialogue;
   $("#pauseButton").onclick=()=>setPause(true);
@@ -50,7 +76,7 @@ function init(){
   $("#resumeButton").onclick=()=>setPause(false);
   $("#pauseQuit").onclick=quitGame;
   $("#gameQuit").onclick=()=>setPause(true);
-  $("#loadoutBack").onclick=()=>{showScreen(pendingBattle?.kind==='story'?'storyScreen':pendingBattle?.snakePit?'snakePitScreen':'difficultyScreen');};
+  $("#loadoutBack").onclick=()=>{showScreen(pendingBattle?.kind==='endless'?'storyScreen':pendingBattle?.snakePit?'snakePitScreen':'difficultyScreen');};
   $("#difficultyBack").onclick=()=>{pendingChallenge=null;showScreen('battleScreen');};
   $("#snakePitBack").onclick=()=>{pendingChallenge=null;renderChallenges();showScreen('battleScreen');};
   $("#snakeCountRange").oninput=event=>{snakePitDraft=normalizeSnakeCount(event.target.value);renderSnakePitConfig();};
@@ -58,7 +84,7 @@ function init(){
   $("#customRoomBack").onclick=()=>{save.customRoom=structuredClone(customRoomDraft);persist();renderChallenges();showScreen('battleScreen');};
   $("#customAddEnemy").onclick=()=>{if(customRoomDraft.enemies.length>=12){toast('最多编排12支敌军队伍');return;}customRoomDraft.enemies.push({type:'soldier',count:5,row:-1});renderCustomRoom();};
   $("#customRoomStart").onclick=startCustomRoom;
-  $("#buffBack").onclick=()=>{if(pendingBuffBattle?.kind==='custom'){pendingBuffBattle=null;selectedBattleBuff=null;renderCustomRoom();showScreen('customRoomScreen');return;}pendingBattle=pendingBuffBattle;pendingBuffBattle=null;selectedBattleBuff=null;renderLoadout();showScreen('loadoutScreen');};
+  $("#buffBack").onclick=()=>{if(pendingBuffBattle?.kind==='custom'){pendingBuffBattle=null;selectedBattleBuff=null;renderCustomRoom();showScreen('customRoomScreen');return;}if(pendingBuffBattle?.conveyor){pendingBuffBattle=null;selectedBattleBuff=null;renderStory();showScreen('storyScreen');return;}pendingBattle=pendingBuffBattle;pendingBuffBattle=null;selectedBattleBuff=null;renderLoadout();showScreen('loadoutScreen');};
   $("#buffStart").onclick=confirmBattleBuff;
   $("#startAssault").onclick=startPreparedAssault;
   $("#loadoutStart").onclick=confirmLoadout;
@@ -70,21 +96,30 @@ function init(){
 function updateHome(){
   const total=Object.keys(ENEMIES).length;
   $("#archiveCount").textContent=`${Math.min(save.archiveUnlocked,total)}/${total}`;
+  const endlessHint=$("#storyButton small");if(endlessHint)endlessHint.textContent=`当前第 ${currentEndlessLevel()} 关 · 无限关卡与玩法轮换`;
 }
 
+function currentEndlessLevel(){return Math.max(1,Math.floor(+(save.endlessLevel??save.storyUnlocked)||1));}
+function endlessStageScale(level){return 1+Math.log2(Math.max(1,level))*.18+Math.max(0,level-1)*.01;}
+function endlessRuleForLevel(level){
+  if(level%10===0)return {mode:"boss",icon:"将",label:"首领决战",title:"王城首领阵",text:"最终波会有紫蛇首领加入战场。",theme:level%30===0?'snakePit':'armored',boss:true};
+  if(level%7===0)return {mode:"conveyor",icon:"带",label:"传送带玩法",title:"王冠传送带",text:"跳过战前选棋，传送带会从全部已解锁棋子中持续随机送卡；种下一枚后才会消耗该卡。",theme:"dusk",conveyor:true};
+  if(level%5===0)return {mode:"setup",icon:"阵",label:"提前布阵",title:"先手布阵战",text:"敌军出现前可以自由规划阵型，确认后才会正式来敌。",theme:"royal",setupPhase:true};
+  if(level%11===0)return {mode:"trick",icon:"乱",label:"诡阵玩法",title:"镜铲乱阵",text:"换线、掘阵、反弹与召唤敌军会混编进攻。",theme:"trick"};
+  if(level%4===0)return {mode:"frozen",icon:"冰",label:"冰封玩法",title:"霜辙封盘",text:"霜辙车会冻结正式战斗格，迫使阵型不断调整。",theme:"frozen"};
+  if(level%3===0)return {mode:"armored",icon:"甲",label:"重甲玩法",title:"铁壁推进",text:"本关以护卫、铁车与重甲将领为主。",theme:"armored"};
+  return {mode:"normal",icon:"战",label:"普通防守",title:"五路坚守",text:"建立阵线并击退逐波增强的常规敌军。",theme:["grassland","classic","steppe"][level%3]};
+}
+function buildEndlessStage(level=currentEndlessLevel(),difficulty="standard"){
+  level=Math.max(1,Math.floor(+level||1));const rule=endlessRuleForLevel(level),base=ENDLESS_DIFFICULTIES[difficulty]||ENDLESS_DIFFICULTIES.standard,waves=rule.boss?Math.min(8,5+Math.floor(level/40)):Math.min(8,3+Math.floor((level-1)/12)),levelLog=Math.log2(level+1),levelCount=1+Math.min(1.35,levelLog*.085),difficultyData={...base,count:base.count*levelCount,damage:base.damage*(1+levelLog*.035),speed:base.speed*(1+Math.min(.16,levelLog*.012)),spawnInterval:Math.max(.55,base.spawnInterval/(1+levelLog*.025))};
+  return {kind:"endless",id:"endless",endlessLevel:level,mode:rule.mode,modeLabel:rule.label,title:`第 ${level} 关 · ${rule.title} · ${base.name}`,stageTitle:rule.title,text:rule.text,objective:`目标 · 通过第 ${level} 关的 ${waves} 波敌潮`,waves,energy:rule.conveyor?0:rule.setupPhase?650:75,theme:rule.theme,boss:!!rule.boss,conveyor:!!rule.conveyor,conveyorInterval:Math.max(3.8,6.8-Math.log2(level+1)*.18),setupPhase:!!rule.setupPhase,difficulty,difficultyData,endlessScale:endlessStageScale(level)};
+}
+function nextEndlessUnlock(level=currentEndlessLevel()){return ENDLESS_UNIT_UNLOCKS.find(entry=>entry.level>level)||null;}
 function renderStory(){
-  const map=$("#levelMap"); map.innerHTML="";
-  STORY.forEach((lvl,i)=>{
-    const unlocked=i<save.storyUnlocked;
-    const complete=i<save.storyUnlocked-1;
-    const card=document.createElement("button");
-    card.className=`level-card ${!unlocked?'locked':''} ${i===save.storyUnlocked-1?'current':''} ${lvl.boss?'boss':''}`;
-    card.innerHTML=`<span class="level-index">CHAPTER ${String(i+1).padStart(2,"0")}</span><span class="level-state">${complete?'✓ 已完成':unlocked?'可挑战':'◈ 未解锁'}</span><h4>${lvl.title}</h4><p>${lvl.subtitle}</p><span class="level-icon">${lvl.icon}</span>`;
-    if(unlocked) card.onclick=()=>startStory(i);
-    map.append(card);
-  });
-  $("#storyProgressLabel").textContent=`第 ${Math.min(save.storyUnlocked,6)} / 6 章`;
-  $("#storyProgressBar").style.width=`${(Math.min(save.storyUnlocked,6)/6)*100}%`;
+  const level=currentEndlessLevel(),stage=buildEndlessStage(level,save.endlessDifficulty),next=nextEndlessUnlock(level),previous=[...ENDLESS_UNIT_UNLOCKS].reverse().find(entry=>entry.level<=level),progress=next?clamp((level-(previous?.level||1))/(next.level-(previous?.level||1))*100,0,100):100,nextNames=next?next.types.map(type=>UNITS[type].name).join("、"):"";
+  $("#storyProgressLabel").textContent=`当前第 ${level} 关`;$("#storyProgressBar").style.width=`${progress}%`;
+  $("#levelMap").className="level-map endless-map";$("#levelMap").innerHTML=`<article class="endless-stage-card" data-mode="${stage.mode}"><header><span>STAGE ${String(level).padStart(3,"0")} · ${stage.modeLabel}</span><b>${endlessRuleForLevel(level).icon}</b></header><h3>${stage.stageTitle}</h3><p>${stage.text}</p><div class="endless-stage-stats"><span>${stage.waves} 波敌潮</span><span>强度 ×${stage.endlessScale.toFixed(2)}</span><span>${stage.conveyor?'持续送棋':stage.setupPhase?'650能量预先布阵':'75初始能量'}</span></div><div class="endless-unlock"><span>${next?`下一次解锁 · 第 ${next.level} 关`:'常规棋子已全部解锁'}</span><b>${next?`${next.types.map(type=>unitArt(type,'compact-art')).join('')} ${nextNames}`:'继续挑战更高关卡'}</b></div><footer><p>选择本关难度</p><div class="endless-mode-buttons"><button data-endless-difficulty="standard"><span>NORMAL</span><b>普通模式</b><small>按当前关卡强度推进</small></button><button data-endless-difficulty="hard"><span>HARD</span><b>困难模式</b><small>生命、攻击、速度与敌量全面提高</small></button></div></footer></article>`;
+  $$('[data-endless-difficulty]').forEach(button=>{button.classList.toggle('active',button.dataset.endlessDifficulty===save.endlessDifficulty);button.onclick=()=>startEndless(level,button.dataset.endlessDifficulty);});
 }
 
 function renderChallenges(){
@@ -113,12 +148,12 @@ function renderCustomRoom(){
   $("#customRoomSummary").textContent=`敌军 ${total} · 我方 ${customRoomDraft.units.length} 种`;$("#customUnitCount").textContent=customRoomDraft.units.length;
   $("#customEnemyRows").innerHTML=customRoomDraft.enemies.map((entry,index)=>`<div class="custom-enemy-row" data-custom-enemy="${index}" style="--enemy-accent:${ENEMIES[entry.type].boss?'#9c3b82':'#a43c32'}"><select data-custom-enemy-type>${enemyOptions}</select><input data-custom-enemy-count type="number" min="1" max="100" value="${entry.count}" aria-label="敌军数量"><select data-custom-enemy-row>${rowOptions}</select><button data-custom-enemy-remove title="删除这一队">×</button></div>`).join('');
   $$("[data-custom-enemy]").forEach(row=>{const index=+row.dataset.customEnemy,entry=customRoomDraft.enemies[index],type=$("[data-custom-enemy-type]",row),count=$("[data-custom-enemy-count]",row),lane=$("[data-custom-enemy-row]",row);type.value=entry.type;lane.value=String(entry.row);type.onchange=()=>{entry.type=type.value;renderCustomRoom();};count.oninput=()=>{entry.count=clamp(Math.round(+count.value||1),1,100);const sum=customRoomDraft.enemies.reduce((total,e)=>total+e.count,0);$("#customRoomSummary").textContent=`敌军 ${sum} · 我方 ${customRoomDraft.units.length} 种`;$("#customRoomStart").disabled=!customRoomDraft.units.length||!sum||sum>300;};count.onchange=renderCustomRoom;lane.onchange=()=>{entry.row=+lane.value;renderCustomRoom();};$("[data-custom-enemy-remove]",row).onclick=()=>{if(customRoomDraft.enemies.length===1){toast('至少保留一支敌军队伍');return;}customRoomDraft.enemies.splice(index,1);renderCustomRoom();};});
-  $("#customUnitGrid").innerHTML=Object.entries(UNITS).filter(([,u])=>!u.fusionOnly).map(([type,u])=>{const chosen=customRoomDraft.units.find(x=>x.type===type),rank=chosen?.rank||1;return `<div class="custom-unit-entry ${chosen?'selected':''}" data-custom-unit="${type}" style="--unit-color:${u.color}" role="button" tabindex="0">${unitArt(type,'compact-art')}<strong>${u.name}</strong><small>${u.family}</small><span class="custom-rank-picker">${Array.from({length:5},(_,i)=>`<button class="${rank===i+1?'active':''}" data-custom-rank="${i+1}" title="设为${i+1}阶">${i+1}阶</button>`).join('')}</span></div>`;}).join('');
+  $("#customUnitGrid").innerHTML=orderedUnitEntries({includeFusion:false}).map(([type,u])=>{const chosen=customRoomDraft.units.find(x=>x.type===type),rank=chosen?.rank||1;return `<div class="custom-unit-entry ${chosen?'selected':''}" data-custom-unit="${type}" style="--unit-color:${u.color}" role="button" tabindex="0">${unitArt(type,'compact-art')}<strong>${u.name}</strong><small>${u.family}</small><span class="custom-rank-picker">${Array.from({length:5},(_,i)=>`<button class="${rank===i+1?'active':''}" data-custom-rank="${i+1}" title="设为${i+1}阶">${i+1}阶</button>`).join('')}</span></div>`;}).join('');
   $$("[data-custom-unit]").forEach(card=>{const type=card.dataset.customUnit;card.onclick=event=>{if(event.target.closest('[data-custom-rank]'))return;const index=customRoomDraft.units.findIndex(u=>u.type===type);if(index>=0)customRoomDraft.units.splice(index,1);else if(customRoomDraft.units.length>=6){toast('自定义房间最多选择6种我方棋子');return;}else customRoomDraft.units.push({type,rank:1});renderCustomRoom();};$$("[data-custom-rank]",card).forEach(button=>button.onclick=event=>{event.stopPropagation();let chosen=customRoomDraft.units.find(u=>u.type===type);if(!chosen){if(customRoomDraft.units.length>=6){toast('自定义房间最多选择6种我方棋子');return;}chosen={type,rank:+button.dataset.customRank};customRoomDraft.units.push(chosen);}else chosen.rank=+button.dataset.customRank;renderCustomRoom();});});
   $("#customRoomStart").disabled=!customRoomDraft.units.length||!total||total>300;
 }
 function startCustomRoom(){
-  const total=customRoomDraft.enemies.reduce((sum,e)=>sum+e.count,0);if(total>300){toast('房间敌军总数不能超过300');return;}if(!customRoomDraft.units.length){toast('至少选择一种我方棋子');return;}save.customRoom=structuredClone(customRoomDraft);persist();const loadout=customRoomDraft.units.map(u=>u.type),customRanks=Object.fromEntries(customRoomDraft.units.map(u=>[u.type,u.rank]));pendingBuffBattle={kind:'custom',id:'custom',title:'自定义房间',objective:'清除自定义敌军',waves:1,energy:2000,setupPhase:true,customEnemies:structuredClone(customRoomDraft.enemies),customRanks,loadout};openBuffSelection();
+  const total=customRoomDraft.enemies.reduce((sum,e)=>sum+e.count,0);if(total>300){toast('房间敌军总数不能超过300');return;}if(!customRoomDraft.units.length){toast('至少选择一种我方棋子');return;}save.customRoom=structuredClone(customRoomDraft);persist();const loadout=customRoomDraft.units.map(u=>u.type),customRanks=Object.fromEntries(customRoomDraft.units.map(u=>[u.type,u.rank]));pendingBuffBattle={kind:'custom',id:'custom',title:'自定义房间',objective:'清除自定义敌军',waves:1,infiniteEnergy:true,setupPhase:true,customEnemies:structuredClone(customRoomDraft.enemies),customRanks,loadout};openBuffSelection();
 }
 function openDifficulty(config){
   pendingChallenge=config;$("#difficultyMission").textContent=config.title;$("#difficultyTitle").textContent=config.title;$("#difficultyText").textContent=config.text;$("#difficultyObjective").textContent=config.objective;
@@ -128,27 +163,29 @@ function openDifficulty(config){
 
 function renderArchive(selected=0){
   const keys=Object.keys(ENEMIES);
-  $("#archiveList").innerHTML=keys.map((k,i)=>{ const e=ENEMIES[k], locked=i>=save.archiveUnlocked; return `<button class="archive-item ${i===selected&&!locked?'active':''} ${locked?'locked':''}" data-i="${i}"><b>${locked?'?':e.char}</b><span><b>${locked?'未解密':e.name}</b><small>${locked?'完成更多故事关卡':'汉界军 · UNIT '+String(i+1).padStart(2,'0')}</small></span></button>`; }).join("");
+  $("#archiveList").innerHTML=keys.map((k,i)=>{ const e=ENEMIES[k], locked=i>=save.archiveUnlocked; return `<button class="archive-item ${i===selected&&!locked?'active':''} ${locked?'locked':''}" data-i="${i}"><b>${locked?'?':e.char}</b><span><b>${locked?'未解密':e.name}</b><small>${locked?'完成更多无尽关卡':'汉界军 · UNIT '+String(i+1).padStart(2,'0')}</small></span></button>`; }).join("");
   $$(".archive-item:not(.locked)").forEach(el=>el.onclick=()=>renderArchive(+el.dataset.i));
   const i=Math.min(selected,save.archiveUnlocked-1), e=ENEMIES[keys[i]];
   $("#archiveDetail").innerHTML=`<div class="archive-hero"><div class="archive-disc">${e.char}</div><div class="archive-title"><span>ENEMY FILE · ${String(i+1).padStart(3,'0')}</span><h3>${e.name}</h3><p>${e.boss?'统御蛇影军团的最终首领':'汉界军标准作战单位'} · ${e.range?'远程型':e.speed>.2?'高速型':e.hp>1200?'重甲型':'近战型'}</p><div class="stat-bars">${['耐久','攻击','速度'].map((n,j)=>`<div class="stat-bar"><span>${n}</span><b>${e.stats[j]}</b><div><i style="width:${e.stats[j]}%"></i></div></div>`).join('')}</div></div></div><div class="intel-note"><b>作战笔记</b><p>${e.intel}</p></div>`;
 }
 
-function startStory(index){
-  const level=STORY[index];
-  const config={kind:'story',storyIndex:index,title:level.title,waves:level.waves,energy:level.energy,boss:level.boss,featured:level.featured};
-  runDialogue(level.pre,{title:`第 ${index+1} 章\n${level.title}`, onDone:()=>openLoadout(config)});
+function startEndless(level=currentEndlessLevel(),difficulty=save.endlessDifficulty||'standard'){
+  save.endlessDifficulty=ENDLESS_DIFFICULTIES[difficulty]?difficulty:'standard';persist();const config=buildEndlessStage(level,save.endlessDifficulty);
+  if(config.conveyor){pendingBuffBattle={...config,conveyorPool:availableConveyorTypes()};openBuffSelection();return;}
+  openLoadout(config);
 }
 function startChallenge(config,difficulty='standard'){const difficultyData=DIFFICULTIES[difficulty]||DIFFICULTIES.standard;openLoadout({kind:'challenge',...config,title:`${config.title} · ${difficultyData.name}`,difficulty,difficultyData});}
 
 function specialUnlockRule(type){return SPECIAL_UNLOCKS[type]||null;}
 function isUnitUnlocked(type){
   const u=UNITS[type];if(!u)return false;if(u.fusionOnly)return true;
+  if(save.legacyUnlockedUnits?.includes(type))return true;
   const rule=specialUnlockRule(type);if(u.unlockKey)return !!save.specialUnlocked[type]||(!rule?.battleOnly&&(save.unlockProgress[u.unlockKey]||0)>=rule.target);
-  return save.storyUnlocked>=(u.unlockAt||99);
+  return currentEndlessLevel()>=(ENDLESS_UNLOCK_LEVEL_BY_TYPE[type]??u.unlockAt??99);
 }
+function availableConveyorTypes(){return orderedUnitTypes({includeFusion:false}).filter(isUnitUnlocked);}
 function unlockProgressText(type){
-  const rule=specialUnlockRule(type),u=UNITS[type];if(u?.fusionOnly)return `战斗中以${UNITS[u.fusionSource].name}种在${UNITS[u.fusionBase].name}上融合`;if(!rule)return `第 ${u.unlockAt} 章解锁`;if(save.specialUnlocked[type])return `特殊条件已完成 · ${rule.name}`;
+  const rule=specialUnlockRule(type),u=UNITS[type];if(u?.fusionOnly)return `战斗中以${UNITS[u.fusionSource].name}种在${UNITS[u.fusionBase].name}上融合`;if(!rule)return `第 ${ENDLESS_UNLOCK_LEVEL_BY_TYPE[type]??u.unlockAt} 关解锁`;if(save.specialUnlocked[type])return `特殊条件已完成 · ${rule.name}`;
   const value=rule.battleOnly?(game?.used?.queen||0):(save.unlockProgress[u.unlockKey]||0);return `${rule.description} · ${Math.min(rule.target,Math.floor(value))}/${rule.target}`;
 }
 function unlockSpecial(type){if(save.specialUnlocked[type])return false;save.specialUnlocked[type]=true;persist();toast(`秘藏棋子解锁 · ${UNITS[type].name}`);return true;}
@@ -157,7 +194,7 @@ function recordUnlockProgress(key,amount=1){
   Object.entries(UNITS).filter(([,u])=>u.unlockKey===key).forEach(([type])=>{const rule=specialUnlockRule(type);if(rule&&!rule.battleOnly&&save.unlockProgress[key]>=rule.target)unlockSpecial(type);});persist();
 }
 function openLoadout(config){
-  pendingBattle=config;const available=Object.keys(UNITS).filter(type=>!UNITS[type].fusionOnly&&isUnitUnlocked(type)),remembered=(save.lastLoadout||[]).filter(k=>available.includes(k));selectedLoadout=(remembered.length?remembered:['pawn','rook','king'].filter(k=>available.includes(k))).slice(0,6);loadoutFocusType=selectedLoadout[0]||available[0]||'pawn';renderLoadout();showScreen('loadoutScreen');
+  pendingBattle=config;const available=orderedUnitTypes({includeFusion:false}).filter(isUnitUnlocked),remembered=(save.lastLoadout||[]).filter(k=>available.includes(k));selectedLoadout=(remembered.length?remembered:['pawn','rook','king'].filter(k=>available.includes(k))).slice(0,6);loadoutFocusType=selectedLoadout[0]||available[0]||'pawn';renderLoadout();showScreen('loadoutScreen');
 }
 function renderLoadoutPreview(){
   const type=UNITS[loadoutFocusType]?loadoutFocusType:(selectedLoadout[0]||'pawn'),u=UNITS[type],rank=save.ranks[type]||1,selected=selectedLoadout.includes(type),unlocked=isUnitUnlocked(type);$("#loadoutUnitPreview").style.setProperty('--unit-color',u.color);$("#loadoutUnitPreview").innerHTML=`<span class="loadout-preview-art">${unitArt(type,'loadout-preview-piece')}</span><div><span>${u.family} · ${unlocked?'已解锁':unlockProgressText(type)}</span><h3>${u.name}</h3><p>${u.desc}</p></div><aside><small>当前阶位</small><b>${rank}阶</b><i>${selected?'✓ 已加入编队':`✦ ${u.cost} 能量`}</i></aside>`;
@@ -165,7 +202,7 @@ function renderLoadoutPreview(){
 function renderLoadout(){
   $("#loadoutMission").textContent=pendingBattle?.title||'战斗编队';$("#loadoutCount").textContent=selectedLoadout.length;
   $("#loadoutSlots").innerHTML=Array.from({length:6},(_,i)=>{const k=selectedLoadout[i],u=k&&UNITS[k];return `<span class="loadout-slot ${u?'filled':''}">${u?`${unitArt(k,'compact-art')}<small>${u.name}</small>`:'<b>＋</b><small>空位</small>'}</span>`;}).join('');
-  $("#loadoutRoster").innerHTML=Object.entries(UNITS).filter(([,u])=>!u.fusionOnly).map(([k,u])=>{const unlocked=isUnitUnlocked(k),selected=selectedLoadout.includes(k),state=unlocked?(selected?'已上场':'点击选择'):unlockProgressText(k),rank=save.ranks[k]||1;return `<button class="roster-card ${selected?'selected':''} ${unlocked?'':'locked'} ${loadoutFocusType===k?'focused':''}" data-unit="${k}" style="--unit-color:${u.color}" title="${u.name} · ${u.desc} · ${state}" aria-label="${u.name}，${rank}阶，需要${u.cost}能量，${state}" ${unlocked?'':'disabled'}><span class="choice-card-art">${unitArt(k,'choice-art')}</span><span class="choice-card-rank">${rank}</span><span class="choice-card-footer"><i>✦</i>${u.cost}</span></button>`;}).join('');
+  $("#loadoutRoster").innerHTML=orderedUnitEntries({includeFusion:false}).map(([k,u])=>{const unlocked=isUnitUnlocked(k),selected=selectedLoadout.includes(k),state=unlocked?(selected?'已上场':'点击选择'):unlockProgressText(k),rank=save.ranks[k]||1;return `<button class="roster-card ${selected?'selected':''} ${unlocked?'':'locked'} ${loadoutFocusType===k?'focused':''}" data-unit="${k}" style="--unit-color:${u.color}" title="${u.name} · ${u.desc} · ${state}" aria-label="${u.name}，${rank}阶，需要${u.cost}能量，${state}" ${unlocked?'':'disabled'}><span class="choice-card-art">${unitArt(k,'choice-art')}</span><span class="choice-card-rank">${rank}</span><span class="choice-card-footer"><i>✦</i>${u.cost}</span></button>`;}).join('');
   $$(".roster-card:not(.locked)").forEach(el=>{el.onclick=()=>toggleLoadout(el.dataset.unit);el.onmouseenter=()=>{loadoutFocusType=el.dataset.unit;renderLoadoutPreview();};el.onfocus=()=>{loadoutFocusType=el.dataset.unit;renderLoadoutPreview();};});renderLoadoutPreview();$("#loadoutStart").disabled=selectedLoadout.length===0;
 }
 function toggleLoadout(type){loadoutFocusType=type;const index=selectedLoadout.indexOf(type);if(index>=0)selectedLoadout.splice(index,1);else if(selectedLoadout.length>=6){toast('每场最多选择6种棋子');renderLoadoutPreview();return;}else selectedLoadout.push(type);renderLoadout();}
@@ -216,15 +253,16 @@ function buildGrid(){
 function beginGame(config){
   stopGame();
   const startingEnergy=config.infiniteEnergy?999999:(config.energy??75)+(config.buffData?.energy||0),startingBeans=Math.min(3,(config.startingBeans||0)+(config.buffData?.beans||0));
-  game={ config, energy:startingEnergy, energyCollected:startingEnergy, beans:startingBeans, beanDrops:[], abilityEvents:[], selected:config.loadout?.[0]||'pawn', cooldowns:{}, players:[], enemies:[], hazards:[], projectiles:[], kills:0, wave:0, spawned:0, waveTarget:0, nextSpawn:1, nextWave:config.setupPhase?999:2.5, elapsed:0, paused:false, over:false, preparing:!!config.setupPhase,lastTime:performance.now(), orbTimer:8, entityId:0, used:{}, rankUps:[], bossSpawned:false };
+  game={ config, energy:startingEnergy, energyCollected:startingEnergy, beans:startingBeans, beanDrops:[], abilityEvents:[], selected:config.loadout?.[0]||'pawn', selectedConveyorId:null, conveyorQueue:[], conveyorTimer:0, cooldowns:{}, players:[], enemies:[], hazards:[], projectiles:[], kills:0, wave:0, spawned:0, waveTarget:0, nextSpawn:1, nextWave:config.setupPhase?999:2.5, elapsed:0, paused:false, over:false, preparing:!!config.setupPhase,lastTime:performance.now(), orbTimer:8, entityId:0, used:{}, rankUps:[], bossSpawned:false };
   Object.keys(UNITS).forEach(k=>game.cooldowns[k]=0);
+  if(config.conveyor)seedConveyor(4);
   if(config.protect){
     const p=createPlayer('king',2,0,true); p.hp=1500; p.maxHp=1500; game.players.push(p);
   }
   $("#board").dataset.theme=battlefieldTheme(config);
   renderUnitTray(); updateGameHeader(); renderEntities(); showScreen("gameScreen");
-  $("#missionTitle").textContent=config.kind==='story'?`第 ${config.storyIndex+1} 章 · ${config.title}`:config.title;
-  $("#startAssault").classList.toggle('show',game.preparing);$("#battleTip").textContent=game.preparing?'布阵阶段：敌军尚未出现，摆好后点击“开始来敌”':`战前增益：${config.buffData?.name||'无'} · ${config.protect?'特殊王棋绝不能被摧毁':'选择棋子，再点击空格部署'}`;
+  $("#missionTitle").textContent=config.kind==='endless'?`无尽挑战 · 第 ${config.endlessLevel} 关 · ${config.modeLabel}`:config.title;
+  $("#startAssault").classList.toggle('show',game.preparing);$("#battleTip").textContent=game.preparing?'提前布阵：敌军尚未出现，摆好后点击“开始来敌”':config.conveyor?'传送带会持续送来棋子：选择一张卡，再点击空格种下':`战前增益：${config.buffData?.name||'无'} · ${config.protect?'特殊王棋绝不能被摧毁':'选择棋子，再点击空格部署'}`;
   game.raf=requestAnimationFrame(gameLoop);
 }
 function startPreparedAssault(){
@@ -253,10 +291,27 @@ function startSnakePit(count){
   game.wave=1;game.waveTarget=normalizeSnakeCount(count);game.spawned=0;game.nextWave=999;game.nextSpawn=0;spawnSnakePitBatch(SNAKE_PIT_ACTIVE_CAP);return game.waveTarget;
 }
 
+function addConveyorCard(){
+  if(!game?.config?.conveyor||game.conveyorQueue.length>=8)return null;const pool=game.config.conveyorPool?.length?game.config.conveyorPool:availableConveyorTypes(),type=pool[Math.floor(Math.random()*pool.length)],card={id:++game.entityId,type};game.conveyorQueue.push(card);if(!game.selectedConveyorId){game.selectedConveyorId=card.id;game.selected=card.type;}return card;
+}
+function seedConveyor(count=4){for(let i=0;i<count;i++)addConveyorCard();game.conveyorTimer=game.config.conveyorInterval||4;}
+function updateConveyor(dt){
+  if(!game?.config?.conveyor)return;game.conveyorTimer-=dt;if(game.conveyorTimer>0||game.conveyorQueue.length>=8)return;addConveyorCard();game.conveyorTimer=game.config.conveyorInterval||4;renderUnitTray();
+}
+function selectedConveyorCard(type=game?.selected){return game?.conveyorQueue?.find(card=>card.id===game.selectedConveyorId&&card.type===type)||null;}
+function deploymentAvailable(type){return game.config.conveyor?!!selectedConveyorCard(type):game.energy>=UNITS[type].cost&&game.cooldowns[type]<=0;}
+function showDeploymentUnavailable(type){if(game.config.conveyor)toast("等待传送带送来这枚棋子");else if(game.energy<UNITS[type].cost)toast("能量不足");else toast(`${UNITS[type].name}仍在整备中`);}
+function commitDeployment(type,row,col){
+  const u=UNITS[type];if(game.config.conveyor){const card=selectedConveyorCard(type);game.conveyorQueue=game.conveyorQueue.filter(item=>item!==card);const next=game.conveyorQueue[0];game.selectedConveyorId=next?.id||null;game.selected=next?.type||type;return;}
+  game.energy-=u.cost;const frugalKing=game.players.find(p=>p.type==='king'&&p.rank>=2&&Math.hypot(p.col-col,p.row-row)<=1.55);if(frugalKing){const refund=Math.round(u.cost*.2);game.energy+=refund;floatText(col+.5,row+.1,`节俭 +${refund}`,'#ffe084');}if(game.config.infiniteEnergy)game.energy=999999;game.cooldowns[type]=game.config.noCooldown?0:u.cd*(game.config.buffData?.cooldown||1);
+}
+
 function renderUnitTray(){
   const shovel=`<button class="shovel-card ${game.selected==='shovel'?'selected':''}" data-tool="shovel" title="铲除误放的我方棋子"><span class="shovel-icon"><i></i></span><b>铲子</b><small>移除棋子</small></button>`;
+  if(game.config.conveyor){const interval=game.config.conveyorInterval||6,cards=game.conveyorQueue.map(card=>{const u=UNITS[card.type],rank=save.ranks[card.type]||1;return `<button class="unit-card conveyor-card ${game.selected!=='bean'&&game.selectedConveyorId===card.id?'selected':''}" style="--unit-color:${u.color}" data-unit="${card.type}" data-conveyor-id="${card.id}" title="随机传送带棋子 · ${u.name} · ${rank}阶"><span class="choice-card-art">${unitArt(card.type,'choice-art')}</span><span class="choice-card-rank">${rank}</span><span class="choice-card-footer">随机来棋</span></button>`;}).join("");$("#unitTray").classList.add('conveyor-tray');$("#unitTray").innerHTML=shovel+`<section class="conveyor-machine" style="--belt-speed:${Math.max(3.2,interval*.7)}s"><header><i></i><b>随机传送带</b><i></i></header><div class="conveyor-belt">${cards}</div><footer><i></i><span>约 ${interval.toFixed(1)} 秒 / 张</span><i></i></footer></section>`;$(".shovel-card").onclick=()=>{game.selected='shovel';game.selectedConveyorId=null;renderUnitTray();};$$(".conveyor-card").forEach(el=>el.onclick=()=>{game.selected=el.dataset.unit;game.selectedConveyorId=+el.dataset.conveyorId;renderUnitTray();$("#battleTip").textContent=`已取得${UNITS[game.selected].name}：点击空格种下后消耗这张卡`;});return;}
+  $("#unitTray").classList.remove('conveyor-tray');
   const allowed=new Set(game.config.loadout||['pawn','rook','king']);
-  $("#unitTray").innerHTML=shovel+Object.entries(UNITS).filter(([k])=>allowed.has(k)).map(([k,u])=>{const rank=game.config.customRanks?.[k]??save.ranks[k]??1;return `<button class="unit-card unit-${k} ${game.selected===k?'selected':''}" style="--unit-color:${u.color}" data-unit="${k}" title="${u.name} · ${u.desc} · ${rank}阶 · 需要${u.cost}能量" aria-label="${u.name}，${rank}阶，需要${u.cost}能量"><span class="choice-card-art">${unitArt(k,'choice-art')}</span><span class="choice-card-rank">${rank}</span><span class="choice-card-footer"><i>✦</i>${u.cost}</span></button>`;}).join("");
+  $("#unitTray").innerHTML=shovel+orderedUnitEntries({includeFusion:false,allowed}).map(([k,u])=>{const rank=game.config.customRanks?.[k]??save.ranks[k]??1;return `<button class="unit-card unit-${k} ${game.selected===k?'selected':''}" style="--unit-color:${u.color}" data-unit="${k}" title="${u.name} · ${u.desc} · ${rank}阶 · 需要${u.cost}能量" aria-label="${u.name}，${rank}阶，需要${u.cost}能量"><span class="choice-card-art">${unitArt(k,'choice-art')}</span><span class="choice-card-rank">${rank}</span><span class="choice-card-footer"><i>✦</i>${u.cost}</span></button>`;}).join("");
   $(".shovel-card").onclick=()=>{ game.selected='shovel'; renderUnitTray(); $("#battleTip").textContent='铲子已选中：点击我方棋子将其移除'; };
   $$(".unit-card").forEach(el=>el.onclick=()=>{ game.selected=el.dataset.unit; const tip=UNITS[game.selected].desc;renderUnitTray(); $("#battleTip").textContent=game.config.protect?`特殊王棋不可铲除 · ${tip}`:tip; });
   updateTrayState();
@@ -264,12 +319,13 @@ function renderUnitTray(){
 function selectEnergyBean(){
   if(!game||game.over||game.paused)return;
   if((game.beans||0)<=0){toast('击破盾山将、镇国大将等强敌可获得能量豆');return;}
-  game.selected=game.selected==='bean'?(game.config.loadout?.[0]||'pawn'):'bean';
+  if(game.config.conveyor&&game.selected==='bean'){const next=selectedConveyorCard()||game.conveyorQueue[0];game.selectedConveyorId=next?.id||null;game.selected=next?.type||'pawn';}else game.selected=game.selected==='bean'?(game.config.loadout?.[0]||'pawn'):'bean';
   renderUnitTray();updateGameHeader();
   $("#battleTip").textContent=game.selected==='bean'?'能量豆已选中：点击一枚我方棋子发动爆发技':'选择棋子，再点击空格部署';
 }
 function updateTrayState(){
   if(!game) return;
+  if(game.config.conveyor){$$(".unit-card").forEach(el=>{el.classList.remove("disabled","cooling");el.style.setProperty('--cool',0);});return;}
   $$(".unit-card").forEach(el=>{
     const k=el.dataset.unit,u=UNITS[k],cd=game.cooldowns[k];
     el.classList.toggle("disabled",game.energy<u.cost||cd>0);
@@ -292,7 +348,7 @@ function placeSelected(row,col){
   if(game.selected==='bean'){
     if((game.beans||0)<=0){game.selected=game.config.loadout?.[0]||'pawn';toast('没有可用的能量豆');renderUnitTray();updateGameHeader();return;}
     if(!occupant){toast('请点击一枚我方棋子发动爆发技');return;}
-    game.beans--;activateEnergyBean(occupant);game.selected=game.config.loadout?.includes(occupant.type)?occupant.type:(game.config.loadout?.[0]||'pawn');renderUnitTray();updateGameHeader();return;
+    game.beans--;activateEnergyBean(occupant);if(game.config.conveyor){const next=game.conveyorQueue[0];game.selectedConveyorId=next?.id||null;game.selected=next?.type||'pawn';}else game.selected=game.config.loadout?.includes(occupant.type)?occupant.type:(game.config.loadout?.[0]||'pawn');renderUnitTray();updateGameHeader();return;
   }
   if(game.selected==='shovel'){
     if(!occupant){ toast(hazard?'敌方冰面或盾碑无法用铲子清除':'这里没有可以铲除的棋子'); return; }
@@ -303,18 +359,16 @@ function placeSelected(row,col){
   const type=game.selected,u=UNITS[type];
   const fusionType=occupant&&fusionResultFor(occupant.type,type);
   if(fusionType){
-    if(game.energy<u.cost){toast("能量不足，无法完成融合");return;}
-    if(game.cooldowns[type]>0){toast(`${u.name}仍在整备中`);return;}
+    if(!deploymentAvailable(type)){showDeploymentUnavailable(type);return;}
     const result=UNITS[fusionType],hpRatio=occupant.hp/occupant.maxHp,sourceRank=game.config.customRanks?.[type]??save.ranks[type]??1;
-    game.energy-=u.cost;const frugalKing=game.players.find(p=>p.type==='king'&&p.rank>=2&&Math.hypot(p.col-col,p.row-row)<=1.55);if(frugalKing){const refund=Math.round(u.cost*.2);game.energy+=refund;floatText(col+.5,row+.1,`节俭 +${refund}`,'#ffe084');}if(game.config.infiniteEnergy)game.energy=999999;
+    commitDeployment(type,row,col);
     occupant.type=fusionType;occupant.rank=Math.max(occupant.rank||1,sourceRank);occupant.maxHp=Math.round(result.hp*rankMult(fusionType,occupant.rank));occupant.hp=Math.max(1,Math.round(occupant.maxHp*hpRatio));occupant.timer=0;occupant.attackCycles=0;occupant.traitHits=0;occupant.prismMode=0;
-    game.cooldowns[type]=game.config.noCooldown?0:u.cd*(game.config.buffData?.cooldown||1);game.used[type]=(game.used[type]||0)+1;combatVisual('prismBurst',col+.5,row+.5);pulseAt(col+.5,row+.5,result.element);floatText(col+.5,row+.08,`${result.name}融合完成!`,result.color);toast(`${UNITS[result.fusionBase].name} + ${u.name} → ${result.name}`);updateGameHeader();renderUnitTray();renderEntities();return;
+    game.used[type]=(game.used[type]||0)+1;combatVisual('prismBurst',col+.5,row+.5);pulseAt(col+.5,row+.5,result.element);floatText(col+.5,row+.08,`${result.name}融合完成!`,result.color);toast(`${UNITS[result.fusionBase].name} + ${u.name} → ${result.name}`);updateGameHeader();renderUnitTray();renderEntities();return;
   }
   if(occupant){ toast("这个棋位已经被占用"); return; }
   if(hazard){ toast(hazard.type==='ice'?'此格已结冰，无法部署':'盾碑占据了此格，必须先摧毁'); return; }
-  if(game.energy<u.cost){ toast("能量不足"); return; }
-  if(game.cooldowns[type]>0){ toast(`${u.name}仍在整备中`); return; }
-  game.energy-=u.cost;const frugalKing=game.players.find(p=>p.type==='king'&&p.rank>=2&&Math.hypot(p.col-col,p.row-row)<=1.55);if(frugalKing){const refund=Math.round(u.cost*.2);game.energy+=refund;floatText(col+.5,row+.1,`节俭 +${refund}`,'#ffe084');}if(game.config.infiniteEnergy)game.energy=999999;game.players.push(createPlayer(type,row,col)); game.cooldowns[type]=game.config.noCooldown?0:u.cd*(game.config.buffData?.cooldown||1); game.used[type]=(game.used[type]||0)+1;if(type==='queen'&&game.used.queen>=2&&!game.preview)unlockSpecial('twinQueen');
+  if(!deploymentAvailable(type)){showDeploymentUnavailable(type);return;}
+  commitDeployment(type,row,col);game.players.push(createPlayer(type,row,col));game.used[type]=(game.used[type]||0)+1;if(type==='queen'&&game.used.queen>=2&&!game.preview)unlockSpecial('twinQueen');
   pulseAt(col+.5,row+.5,'deploy'); updateGameHeader(); renderUnitTray(); renderEntities();
 }
 
@@ -476,7 +530,8 @@ function updateGame(dt){
   game.elapsed+=dt;
   Object.keys(game.cooldowns).forEach(k=>game.cooldowns[k]=Math.max(0,game.cooldowns[k]-dt));
   game.orbTimer-=dt;
-  if(game.orbTimer<=0){ spawnEnergyOrb(); game.orbTimer=8+Math.random()*4; }
+  if(!game.config.conveyor&&game.orbTimer<=0){ spawnEnergyOrb(); game.orbTimer=8+Math.random()*4; }
+  updateConveyor(dt);
   updateSpawning(dt);
   updateInfiniteUltimates(dt);
   updatePlayers(dt);
@@ -536,7 +591,7 @@ function rushEnemyType(){
 function spawnEnemy(type,row,hpScale=1){
   const e=ENEMIES[type];
   const scaling=game.config.id==='rush'?.64:1+(Math.max(0,game.wave-1)*.045);
-  const difficulty=game.config.difficultyData||DIFFICULTIES.standard,hp=Math.round(e.hp*scaling*hpScale*difficulty.hp);
+  const difficulty=game.config.difficultyData||DIFFICULTIES.standard,hp=Math.round(e.hp*scaling*hpScale*difficulty.hp*(game.config.endlessScale||1));
   const enemy={id:++game.entityId,type,row,x:stagingXForEnemy(type),hp,maxHp:hp,attackTimer:e.rate,jumped:false,summonTimer:e.summoner?10:7,teleportTimer:5,noHitTime:0,regenTick:0,slowTimer:0,burnTimer:0,burnDps:0,poisonTimer:0,poisonDps:0,vulnerableTimer:0,statusTick:0,reflectTimer:3.5,reflectActive:0,lastTrailCol:null};
   game.enemies.push(enemy); return enemy;
 }
@@ -840,15 +895,18 @@ function projectilePosition(p,progress){
   const x=p.x+(p.tx-p.x)*progress,arc=(p.kind==='spearPawn'?Math.sin(Math.PI*progress)*.72:p.kind==='spearVolley'?Math.sin(Math.PI*progress)*1.05:p.kind==='bombardRook'?Math.sin(Math.PI*progress)*.9:0),y=p.y+(p.ty-p.y)*progress-arc;return {x,y};
 }
 function projectileHalfSize(p){return p.kind==='giantPoison'?{x:.48,y:.38}:p.kind==='giantIce'?{x:.3,y:.24}:p.kind==='bombardRook'?{x:.24,y:.2}:{x:.17,y:.12};}
-function projectileCandidates(p){
+function buildProjectileTargetRows(){const rows=Array.from({length:BOARD_RULES.rows},()=>[]);game.enemies.filter(enemyDamageable).forEach(enemy=>rows[enemy.row]?.push(enemy));game.hazards.filter(h=>h.type==='shield').forEach(hazard=>rows[hazard.row]?.push(hazard));return rows;}
+function projectileCandidates(p,targetsByRow=null){
   const rows=p.hit?.allowedRows||[],seen=p.hit?.hitIds||new Set(),dx=p.tx-p.x,dy=p.ty-p.y,length2=dx*dx+dy*dy||1;
-  return [...game.enemies.filter(enemyDamageable),...game.hazards.filter(h=>h.type==='shield')].filter(target=>{
+  const candidates=targetsByRow?rows.flatMap(row=>targetsByRow[row]||[]):[...game.enemies.filter(enemyDamageable),...game.hazards.filter(h=>h.type==='shield')];return candidates.filter(target=>{
     if(seen.has(target.id??target)||!rows.includes(target.row))return false;const cx=targetX(target)+.5,cy=target.row+.5,projection=((cx-p.x)*dx+(cy-p.y)*dy)/length2;return projection>=-.1&&projection<=1.2;
   }).sort((a,b)=>{const ax=targetX(a)+.5,ay=a.row+.5,bx=targetX(b)+.5,by=b.row+.5;return ((ax-p.x)*dx+(ay-p.y)*dy)-((bx-p.x)*dx+(by-p.y)*dy);});
 }
 function applyProjectileEffect(p,target,attacker){
   if(target.isHazard||!game.enemies.includes(target))return;const hit=p.hit,rank=hit.sourceRank||attacker?.rank||1,source={type:hit.sourceType,rank};
-  if(hit.effect==='elemental')applyElementalHit(target,attacker||source,hit.mult||rankMult(hit.sourceType,rank),hit.iceShard);
+  if(hit.effect==='elemental'){
+    applyElementalHit(target,attacker||source,hit.mult||rankMult(hit.sourceType,rank),hit.iceShard);const element=UNITS[hit.sourceType]?.element,effect=element==='electric'?'storm':element==='flame'?'burn':element==='poison'?'poison':'freeze';pulseAt(target.x+.5,target.row+.5,effect);
+  }
   if(hit.effect==='iceRook'){
     applyIceControl(target,rank,hit.sourceType,hit.iceShard);pulseAt(target.x+.5,target.row+.5,'freeze');
   }
@@ -875,9 +933,10 @@ function projectileOverlapsTarget(p,position,target){
   const size=projectileHalfSize(p),cx=targetX(target)+.5,cy=target.row+.5,halfX=target.isHazard ? .43 : enemyHalfWidth(target),halfY=target.isHazard ? .43 : enemyHalfHeight(target);return Math.abs(position.x-cx)<=size.x+halfX&&Math.abs(position.y-cy)<=size.y+halfY;
 }
 function updateProjectiles(dt){
+  const targetsByRow=buildProjectileTargetRows();
   for(const p of game.projectiles){
-    const start=clamp(p.t/p.duration,0,1);p.t+=dt;const end=clamp(p.t/p.duration,0,1);if(!p.hit)continue;const travel=Math.hypot((p.tx-p.x)*(end-start),(p.ty-p.y)*(end-start)),steps=Math.max(1,Math.ceil(travel/.16));
-    let consumed=false;for(let step=1;step<=steps&&!consumed;step++){const position=projectilePosition(p,start+(end-start)*step/steps),targets=projectileCandidates(p);for(const target of targets){if(!projectileOverlapsTarget(p,position,target))continue;resolveProjectileHit(p,target);if(!p.hit.pierce){consumed=true;break;}}}if(consumed)p.consumed=true;
+    const start=clamp(p.t/p.duration,0,1);p.t+=dt;const end=clamp(p.t/p.duration,0,1);if(!p.hit)continue;const travel=Math.hypot((p.tx-p.x)*(end-start),(p.ty-p.y)*(end-start)),steps=Math.max(1,Math.ceil(travel/.16)),targets=projectileCandidates(p,targetsByRow);
+    let consumed=false;for(let step=1;step<=steps&&!consumed;step++){const position=projectilePosition(p,start+(end-start)*step/steps);for(const target of targets){if(!targetStillPresent(target)||p.hit.hitIds.has(target.id??target)||!projectileOverlapsTarget(p,position,target))continue;resolveProjectileHit(p,target);if(!p.hit.pierce){consumed=true;break;}}}if(consumed)p.consumed=true;
   }
   game.projectiles=game.projectiles.filter(p=>!p.consumed&&p.t<p.duration);
 }
@@ -893,20 +952,31 @@ function spawnEnergyOrb(){
   orb.onclick=()=>collect(false);$("#effectLayer").append(orb);setTimeout(()=>collect(true),AUTO_COLLECT_DELAY);
 }
 
+function renderCacheFor(layer){let cache=renderLayerCaches.get(layer);if(!cache){cache={layer,nodes:new Map(),seen:new Set()};renderLayerCaches.set(layer,cache);}cache.seen.clear();return cache;}
+function cachedRenderNode(cache,key,tag="div"){
+  let record=cache.nodes.get(key);if(!record){const el=document.createElement(tag);record={el,signature:""};cache.nodes.set(key,record);cache.layer.append(el);}else if(record.el.parentNode!==cache.layer)cache.layer.append(record.el);cache.seen.add(key);return record;
+}
+function setRenderClass(el,value){if(el.className!==value)el.className=value;}
+function setRenderStyle(el,name,value){if(el.style[name]!==value)el.style[name]=value;}
+function positionRenderNode(el,x,y){setRenderStyle(el,"translate",`calc(var(--cell) * ${x+BOARD_RULES.prep}) calc(var(--cell) * ${y+BOARD_RULES.prep})`);}
+function finishRenderCache(cache){for(const [key,record] of cache.nodes)if(!cache.seen.has(key)){record.el.remove();cache.nodes.delete(key);}}
+function clearRenderLayer(layer){if(!layer)return;renderLayerCaches.delete(layer);layer.innerHTML="";}
 function renderEntities(state=game,layer=$("#entityLayer")){
-  if(!state||!layer)return;
-  layer.innerHTML="";
+  if(!state||!layer)return;const cache=renderCacheFor(layer);
   state.players.forEach(p=>{
-    const u=UNITS[p.type];if((p.ultGlowTimer||0)>0){const glow=document.createElement('i');glow.className=`ultimate-tile-glow glow-${p.type}`;glow.style.left=`${boardXPercent(p.col+.5)}%`;glow.style.top=`${boardYPercent(p.row+.5)}%`;glow.style.setProperty('--ultimate-color',u.color);layer.append(glow);}const el=document.createElement('div');el.className=`piece player-piece player-${p.type} ${p.weaponHidden>0?'weapon-hidden':''} ${p.beanArmor>0?'bean-armored':''}`;el.style.left=`${boardXPercent(p.col+.5)}%`;el.style.top=`${boardYPercent(p.row+.5)}%`;el.style.color=u.color;
-    el.innerHTML=`${unitArt(p.type,'battle-art')}<span class="hp-bar"><i style="width:${clamp(p.hp/p.maxHp*100,0,100)}%"></i></span>${p.beanArmor>0?`<span class="armor-bar"><i style="width:${clamp(p.beanArmor/2000*100,0,100)}%"></i></span>`:''}<span class="rank-pips">${'◆'.repeat(p.rank)}</span>`;layer.append(el);
+    const u=UNITS[p.type],key=`player:${p.id}`,record=cachedRenderNode(cache,key),el=record.el,hasArmor=(p.beanArmor||0)>0,signature=`${p.type}|${p.rank}|${hasArmor}`;
+    if(record.signature!==signature){record.signature=signature;el.innerHTML=`${unitArt(p.type,'battle-art')}<span class="hp-bar"><i></i></span>${hasArmor?'<span class="armor-bar"><i></i></span>':''}<span class="rank-pips">${'◆'.repeat(p.rank)}</span>`;record.hp=el.querySelector('.hp-bar i');record.armor=el.querySelector('.armor-bar i');}
+    setRenderClass(el,`piece player-piece player-${p.type} ${p.weaponHidden>0?'weapon-hidden':''} ${hasArmor?'bean-armored':''}`);positionRenderNode(el,p.col+.5,p.row+.5);setRenderStyle(el,"color",u.color);if(record.hp)setRenderStyle(record.hp,"width",`${clamp(p.hp/p.maxHp*100,0,100)}%`);if(record.armor)setRenderStyle(record.armor,"width",`${clamp(p.beanArmor/2000*100,0,100)}%`);
+    if((p.ultGlowTimer||0)>0){const glowRecord=cachedRenderNode(cache,`glow:${p.id}`,"i"),glow=glowRecord.el;setRenderClass(glow,`ultimate-tile-glow glow-${p.type}`);positionRenderNode(glow,p.col+.5,p.row+.5);glow.style.setProperty('--ultimate-color',u.color);}
   });
   state.enemies.forEach(e=>{
-    const d=ENEMIES[e.type],el=document.createElement('div');el.className=`piece enemy-piece enemy-${e.type} ${d.boss?'boss-piece':''} ${d.giant?'giant-piece':''} ${d.large?'large-piece':''} ${d.summoner?'elephant-piece':''} ${e.slowTimer>0?'slowed-piece':''} ${e.burnTimer>0?'burning-piece':''} ${e.poisonTimer>0?'poisoned-piece':''} ${e.vulnerableTimer>0?'vulnerable-piece':''} ${e.shadowMarks>0?'shadow-marked':''} ${e.reflectActive>0?'reflecting-piece':''}`;el.style.left=`${boardXPercent(e.x+.5)}%`;el.style.top=`${boardYPercent(e.row+.5)}%`;
-    el.innerHTML=`${enemyDecoration(e.type)}<span class="piece-symbol">${d.char}</span>${(e.poisonStacks||0)>1?`<span class="poison-stack">×${e.poisonStacks}</span>`:''}<span class="hp-bar"><i style="width:${clamp(e.hp/e.maxHp*100,0,100)}%"></i></span>`;layer.append(el);
+    const d=ENEMIES[e.type],record=cachedRenderNode(cache,`enemy:${e.id}`),el=record.el;if(record.signature!==e.type){record.signature=e.type;el.innerHTML=`${enemyDecoration(e.type)}<span class="piece-symbol">${d.char}</span><span class="poison-stack" hidden></span><span class="hp-bar"><i></i></span>`;record.hp=el.querySelector('.hp-bar i');record.poison=el.querySelector('.poison-stack');}
+    setRenderClass(el,`piece enemy-piece enemy-${e.type} ${d.boss?'boss-piece':''} ${d.giant?'giant-piece':''} ${d.large?'large-piece':''} ${d.summoner?'elephant-piece':''} ${e.slowTimer>0?'slowed-piece':''} ${e.burnTimer>0?'burning-piece':''} ${e.poisonTimer>0?'poisoned-piece':''} ${e.vulnerableTimer>0?'vulnerable-piece':''} ${e.shadowMarks>0?'shadow-marked':''} ${e.reflectActive>0?'reflecting-piece':''}`);positionRenderNode(el,e.x+.5,e.row+.5);if(record.hp)setRenderStyle(record.hp,"width",`${clamp(e.hp/e.maxHp*100,0,100)}%`);if(record.poison){const stacks=e.poisonStacks||0;record.poison.hidden=stacks<=1;if(stacks>1&&record.poison.textContent!==`×${stacks}`)record.poison.textContent=`×${stacks}`;}
   });
-  state.hazards.forEach(h=>{const el=document.createElement('div');el.className=`board-hazard ${h.type}-hazard`;el.style.left=`${boardXPercent(h.col+.5)}%`;el.style.top=`${boardYPercent(h.row+.5)}%`;el.innerHTML=h.type==='shield'?`<span>盾</span><span class="hp-bar"><i style="width:${clamp(h.hp/h.maxHp*100,0,100)}%"></i></span>`:'<span>❄</span>';layer.append(el);});
-  (state.beanDrops||[]).forEach(drop=>{const el=document.createElement('button');el.className='energy-bean-drop';el.dataset.beanId=drop.id;el.title='拾取能量豆（1.5秒后自动收入）';el.style.left=`${boardXPercent(drop.x+.5)}%`;el.style.top=`${boardYPercent(drop.row+.5)}%`;el.innerHTML='<span><i></i></span>';el.onclick=()=>collectEnergyBean(drop);layer.append(el);});
-  state.projectiles.forEach(p=>{ const t=clamp(p.t/p.duration,0,1),x=p.x+(p.tx-p.x)*t,arc=(p.kind==='spearPawn'?Math.sin(Math.PI*t)*.72:p.kind==='spearVolley'?Math.sin(Math.PI*t)*1.05:0),y=p.y+(p.ty-p.y)*t-arc,el=document.createElement('i');el.className=`projectile proj-${p.kind||'gold'}`;el.style.left=`${boardXPercent(x)}%`;el.style.top=`${boardYPercent(y)}%`;el.style.setProperty('--shot-angle',`${Math.atan2(p.ty-p.y,p.tx-p.x)}rad`);el.style.setProperty('--shot-spin',`${t*720}deg`);layer.append(el); });
+  state.hazards.forEach(h=>{const key=`hazard:${h.id??`${h.type}:${h.row}:${h.col}`}`,record=cachedRenderNode(cache,key),el=record.el;if(record.signature!==h.type){record.signature=h.type;el.innerHTML=h.type==='shield'?'<span>盾</span><span class="hp-bar"><i></i></span>':'<span>❄</span>';record.hp=el.querySelector('.hp-bar i');}setRenderClass(el,`board-hazard ${h.type}-hazard`);positionRenderNode(el,h.col+.5,h.row+.5);if(record.hp)setRenderStyle(record.hp,"width",`${clamp(h.hp/h.maxHp*100,0,100)}%`);});
+  (state.beanDrops||[]).forEach(drop=>{const record=cachedRenderNode(cache,`bean:${drop.id}`,"button"),el=record.el;if(!record.signature){record.signature="bean";el.className='energy-bean-drop';el.title='拾取能量豆（1.5秒后自动收入）';el.innerHTML='<span><i></i></span>';}if(record.source!==drop){record.source=drop;el.onclick=()=>collectEnergyBean(drop);}el.dataset.beanId=drop.id;positionRenderNode(el,drop.x+.5,drop.row+.5);});
+  state.projectiles.forEach(p=>{const record=cachedRenderNode(cache,`projectile:${p.id}`,"i"),el=record.el,kind=p.kind||'gold';if(record.signature!==kind){record.signature=kind;setRenderClass(el,`projectile proj-${kind}`);}const t=clamp(p.t/p.duration,0,1),position=projectilePosition(p,t),phase=p.t*19+p.id*.71,pulse=.96+Math.sin(phase*1.7)*.07;positionRenderNode(el,position.x,position.y);el.style.setProperty('--shot-angle',`${Math.atan2(p.ty-p.y,p.tx-p.x)}rad`);el.style.setProperty('--shot-spin',`${t*720}deg`);el.style.setProperty('--shot-bob',`${Math.sin(phase)*1.35}px`);el.style.setProperty('--shot-stretch',pulse.toFixed(3));el.style.setProperty('--shot-flicker',(.78+Math.sin(phase*2.3)*.2).toFixed(3));el.style.setProperty('--shot-slide',`${(phase*2.4)%18}px`);});
+  finishRenderCache(cache);
 }
 
 function getEffectLayer(){return effectLayerOverride||$("#effectLayer");}
@@ -930,7 +1000,7 @@ function fallenEnemy(enemy){const d=ENEMIES[enemy.type],el=document.createElemen
 
 function updateGameHeader(){
   if(!game)return;
-  $("#energyValue").textContent=Math.floor(game.energy);
+  $("#energyValue").textContent=game.config.infiniteEnergy?'∞':Math.floor(game.energy);
   $("#beanValue").textContent=game.beans||0;$("#beanButton").classList.toggle('ready',(game.beans||0)>0);$("#beanButton").classList.toggle('selected',game.selected==='bean');
   const c=game.config;
   if(c.id==='rush'){
@@ -949,26 +1019,25 @@ function checkEndConditions(){
 
 function setPause(value){ if(!game||game.over)return;game.paused=value;game.lastTime=performance.now();$("#pauseOverlay").classList.toggle('show',value); }
 function quitGame(){ stopGame();$("#pauseOverlay").classList.remove('show');showScreen('homeScreen');updateHome(); }
-function stopGame(){ if(game?.raf)cancelAnimationFrame(game.raf);game=null;$("#effectLayer").innerHTML='';$("#entityLayer").innerHTML='';$$('.resource-flight').forEach(el=>el.remove());$$('.receiving').forEach(el=>el.classList.remove('receiving')); }
+function stopGame(){if(game?.raf)cancelAnimationFrame(game.raf);game=null;$("#effectLayer").innerHTML='';clearRenderLayer($("#entityLayer"));$$('.resource-flight').forEach(el=>el.remove());$$('.receiving').forEach(el=>el.classList.remove('receiving'));}
 
 function endGame(win,reason){
   if(!game||game.over)return; game.over=true;cancelAnimationFrame(game.raf);persist();
   const snapshot={...game,players:[...game.players],enemies:[...game.enemies]};
   $("#resultEmblem").textContent=win?'胜':'败';$("#resultEyebrow").textContent=win?'MISSION COMPLETE':'MISSION FAILED';$("#resultTitle").textContent=win?'防线守住了':'王冠军失守';$("#resultText").textContent=reason;
   $("#statKills").textContent=game.kills;$("#statEnergy").textContent=game.energyCollected;$("#statTime").textContent=fmtTime(game.elapsed);$("#rankReport").textContent=game.rankUps.length?`升阶成果 · ${game.rankUps.join(' / ')}`:'棋子熟练度已记录';
-  $("#resultNext").textContent=win&&game.config.kind==='story'?'继续故事':win?'再来一局':'重新挑战';
-  $("#resultNext").dataset.win=String(win);$("#resultNext").dataset.kind=game.config.kind;$("#resultNext").dataset.index=game.config.storyIndex??'';$("#resultNext").dataset.challenge=game.config.id||'';$("#resultNext").dataset.difficulty=game.config.difficulty||'standard';$("#resultNext").dataset.snakeCount=game.config.snakeCount||'';
-  if(win&&game.config.kind==='story'){
-    const i=game.config.storyIndex,archiveMilestones=[2,3,4,5,8,12];save.storyUnlocked=Math.max(save.storyUnlocked,Math.min(6,i+2));save.archiveUnlocked=Math.max(save.archiveUnlocked,archiveMilestones[i]);persist();updateHome();snapshot.justWonStory=i;
+  $("#resultNext").textContent=game.config.kind==='endless'?(win?'进入下一关':'重新挑战本关'):win?'再来一局':'重新挑战';
+  $("#resultNext").dataset.win=String(win);$("#resultNext").dataset.kind=game.config.kind;$("#resultNext").dataset.index=game.config.endlessLevel??game.config.storyIndex??'';$("#resultNext").dataset.challenge=game.config.id||'';$("#resultNext").dataset.difficulty=game.config.difficulty||'standard';$("#resultNext").dataset.snakeCount=game.config.snakeCount||'';
+  if(win&&game.config.kind==='endless'){
+    const level=game.config.endlessLevel,nextLevel=level+1,newUnlock=ENDLESS_UNIT_UNLOCKS.find(entry=>entry.level===nextLevel),savedLevel=Math.max(currentEndlessLevel(),nextLevel);save.endlessLevel=savedLevel;save.storyUnlocked=savedLevel;save.archiveUnlocked=Math.max(save.archiveUnlocked,Math.min(Object.keys(ENEMIES).length,1+Math.floor(level/3)));if(newUnlock){const names=newUnlock.types.map(type=>UNITS[type].name).join('、');$("#rankReport").textContent=`新棋子解锁 · ${names}${game.rankUps.length?` / ${game.rankUps.join(' / ')}`:''}`;snapshot.unlockedUnits=[...newUnlock.types];}persist();updateHome();
   }
   game.snapshot=snapshot;showScreen('resultScreen');
 }
 
 function handleResultNext(){
   if(!game)return;const snap=game.snapshot||game,win=$("#resultNext").dataset.win==='true',kind=$("#resultNext").dataset.kind,index=+($("#resultNext").dataset.index||0),challengeId=$("#resultNext").dataset.challenge,difficulty=$("#resultNext").dataset.difficulty||'standard',snakeCount=+($("#resultNext").dataset.snakeCount||100);stopGame();
-  if(kind==='story'&&win){
-    const level=STORY[index];runDialogue(level.post,{title:`第 ${index+1} 章\n任务完成`,onDone:()=>{renderStory();showScreen('storyScreen');}});
-  } else if(kind==='story'){ startStory(index); }
+  if(kind==='endless'){startEndless(win?index+1:index,difficulty);}
+  else if(kind==='story'){renderStory();showScreen('storyScreen');}
   else if(kind==='custom'){openCustomRoom();}
   else if(challengeId==='snakePit'){openSnakePitConfig(CHALLENGES.find(c=>c.id===challengeId),snakeCount);}
   else { startChallenge(CHALLENGES.find(c=>c.id===challengeId)||CHALLENGES[0],difficulty); }

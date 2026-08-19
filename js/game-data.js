@@ -47,6 +47,27 @@ const UNITS = {
   superElectricQueen: { name:"超级电能后", family:"超级融合种", fusionOnly:true, fusionBase:"superQueen", fusionSource:"electricQueen", shape:"queen", cost:0, hp:1080, cd:0, attack:65, attackMode:"flat", element:"electric", projectile:"electricRook", color:"#fff36a", desc:"十二联电令 · 由超级后与电能后融合，连续三路各发4枚无限穿透电能弹" }
 };
 
+// 所有选棋界面共用同一套家族顺序；系内保持基础棋、普通衍生棋、融合限定棋的层级。
+const UNIT_FAMILY_ORDER = ["rook","queen","pawn","king","knight","bishop"];
+const UNIT_DATA_ORDER = Object.keys(UNITS);
+const UNIT_DATA_INDEX = Object.fromEntries(UNIT_DATA_ORDER.map((type,index)=>[type,index]));
+const UNIT_FAMILY_INDEX = Object.fromEntries(UNIT_FAMILY_ORDER.map((shape,index)=>[shape,index]));
+function orderedUnitEntries({includeFusion=true,allowed=null}={}){
+  const allowedSet=allowed?(allowed instanceof Set?allowed:new Set(allowed)):null;
+  return UNIT_DATA_ORDER
+    .filter(type=>(includeFusion||!UNITS[type].fusionOnly)&&(!allowedSet||allowedSet.has(type)))
+    .sort((typeA,typeB)=>{
+      const unitA=UNITS[typeA],unitB=UNITS[typeB];
+      const familyDiff=(UNIT_FAMILY_INDEX[unitA.shape]??99)-(UNIT_FAMILY_INDEX[unitB.shape]??99);
+      if(familyDiff)return familyDiff;
+      const tierA=typeA===unitA.shape?0:unitA.fusionOnly?2:1;
+      const tierB=typeB===unitB.shape?0:unitB.fusionOnly?2:1;
+      return tierA-tierB||UNIT_DATA_INDEX[typeA]-UNIT_DATA_INDEX[typeB];
+    })
+    .map(type=>[type,UNITS[type]]);
+}
+function orderedUnitTypes(options={}){return orderedUnitEntries(options).map(([type])=>type);}
+
 const FUSION_RECIPES = {
   superRook:{iceRook:"superIceRook",flameRook:"superFlameRook",poisonRook:"superPoisonRook",electricRook:"superElectricRook"},
   superQueen:{iceQueen:"superIceQueen",flameQueen:"superFlameQueen",poisonQueen:"superPoisonQueen",electricQueen:"superElectricQueen"}
@@ -195,6 +216,24 @@ const DIFFICULTIES = {
   nightmare:{name:"噩梦",label:"NIGHTMARE",desc:"高耐久、高压迫，敌潮几乎不留空隙。",hp:1.75,speed:1.16,damage:1.45,count:1.4,spawnInterval:.74}
 };
 
+// 无尽挑战只提供两个清晰难度；关卡自身会继续叠加敌军强度和数量。
+const ENDLESS_DIFFICULTIES = {
+  standard:{...DIFFICULTIES.standard,name:"普通模式",label:"NORMAL",desc:"按当前关卡强度迎战，适合稳定推进。"},
+  hard:{...DIFFICULTIES.elite,name:"困难模式",label:"HARD",desc:"敌军更硬、更快、数量更多，但通关进度与普通模式共用。"}
+};
+
+// 常规棋子随无尽关卡逐步解锁；秘藏棋仍保留各自的特殊解锁条件。
+const ENDLESS_UNIT_UNLOCKS = [
+  {level:1,types:["pawn","rook","king"]},
+  {level:3,types:["knight"]},{level:5,types:["shieldPawn"]},{level:7,types:["spearPawn"]},{level:9,types:["bishop"]},
+  {level:12,types:["twinRook"]},{level:15,types:["queen"]},{level:18,types:["iceRook"]},{level:21,types:["stormKnight"]},
+  {level:24,types:["twinBishop"]},{level:27,types:["flameRook"]},{level:30,types:["royalKing"]},{level:34,types:["poisonRook"]},
+  {level:38,types:["electricRook"]},{level:42,types:["iceQueen"]},{level:46,types:["flameQueen"]},{level:50,types:["poisonQueen"]},
+  {level:55,types:["electricQueen"]},{level:60,types:["prismQueen"]},{level:65,types:["frostKnight"]},{level:70,types:["poisonBishop"]},
+  {level:76,types:["berserkerPawn"]},{level:82,types:["bombardRook"]},{level:88,types:["warKing"]},{level:94,types:["guardianKnight"]},
+  {level:100,types:["lightBishop"]},{level:108,types:["shadowQueen"]},{level:116,types:["superRook"]},{level:125,types:["superQueen"]}
+];
+
 const BATTLE_BUFFS = {
   reserve:{name:"王冠储备",label:"RESERVE",icon:"能",desc:"开局额外获得100能量。",energy:100},
   power:{name:"锋刃军令",label:"POWER",icon:"攻",desc:"我方所有伤害提高15%。",damage:1.15},
@@ -203,4 +242,4 @@ const BATTLE_BUFFS = {
   bean:{name:"豆仓启封",label:"ENERGY BEAN",icon:"豆",desc:"开局直接获得1枚能量豆。",beans:1}
 };
 
-const defaults = { storyUnlocked:1, archiveUnlocked:1, lastLoadout:["pawn","rook","king"], ranks:Object.fromEntries(Object.keys(UNITS).map(type=>[type,1])), mastery:Object.fromEntries(Object.keys(UNITS).map(type=>[type,0])), unlockProgress:{iceSculptures:0,meltedIce:0,shieldDamage:0}, specialUnlocked:{} };
+const defaults = { endlessLevel:1, storyUnlocked:1, archiveUnlocked:1, endlessDifficulty:"standard", lastLoadout:["pawn","rook","king"], legacyUnlockedUnits:[], unlockMigrationVersion:1, ranks:Object.fromEntries(Object.keys(UNITS).map(type=>[type,1])), mastery:Object.fromEntries(Object.keys(UNITS).map(type=>[type,0])), unlockProgress:{iceSculptures:0,meltedIce:0,shieldDamage:0}, specialUnlocked:{} };
